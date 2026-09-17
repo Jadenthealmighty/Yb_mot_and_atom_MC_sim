@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 3D free-molecular Monte Carlo of the Yb oven nozzle channel array.
 """
@@ -1075,7 +1074,7 @@ PROBE_SLICE_MM = _envf("N3_PROBE_SLICE_MM", 2.0)
 
 # Measured reservoir number density [m^-3]; 0 falls back on the vapour-pressure
 # fit. Sets every absolute flux number, but no angle, width or transmission
-# probability -- those are pressure-independent in the free-molecular limit.
+# probability , those are pressure-independent in the free-molecular limit.
 MEASURED_DENSITY = _envf("N3_DENSITY", 2.142e19)
 
 # Position window for the transverse-velocity figures and the saved data.
@@ -1307,7 +1306,7 @@ def fig_doppler_vs_position(acc, rng, d_mm, nbins=61):
     ax.grid(alpha=0.25)
 
     fig.suptitle(f"Doppler shift and broadening vs transverse position, "
-                 f"{d_mm:.1f} mm plane  --  399 nm, "
+                 f"{d_mm:.1f} mm plane  ,  399 nm, "
                  f"{MHZ_PER_MPS:.4f} MHz per m/s")
     fig.tight_layout()
     return fig, dict(centre_mm=ctr, mean_MHz=mean, sigma_MHz=sig, counts=cnt,
@@ -1791,9 +1790,9 @@ def fig_asymmetry(acc):
     r_z, e_z = ratio_with_err(prof["+z (round cap)"], prof["-z (flat bottom)"])
     r_y, e_y = ratio_with_err(prof["+y"], prof["-y"])
     ax2.errorbar(ctr, r_z, yerr=e_z, fmt="o-", color=RETURN_C, ms=3.5, lw=1.3,
-                 label="+z (cap) / -z (flat)  -- the real asymmetry")
+                 label="+z (cap) / -z (flat)  , the real asymmetry")
     ax2.errorbar(ctr, r_y, yerr=e_y, fmt="s-", color=TRANSMIT_C, ms=3.0, lw=1.0,
-                 alpha=0.75, label="+y / -y  -- must be 1 (symmetry control)")
+                 alpha=0.75, label="+y / -y  , must be 1 (symmetry control)")
     ax2.axhline(1.0, color="k", ls=":", lw=1.2)
     ax2.set_xlim(0, WEDGE_THETA[-1])
     ax2.set_ylim(0.8, 1.25)
@@ -2084,7 +2083,7 @@ def fig_validation(rng, g, w_mc, n_launched, theta_hist_ref=None):
     for v in lr:
         gc = geom_circle(A_HALF, A_HALF * v)
         # Wall-scattered atoms random-walk with step count growing like (L/R)^2,
-        # so the bounce budget grows with the tube -- but stays bounded, since
+        # so the bounce budget grows with the tube , but stays bounded, since
         # the vectorised loop iterates while even one atom survives and numpy's
         # ~30 us per-iteration overhead then dominates the runtime.
         o = trace_batch_3d(rng, _vn(80_000), gc,

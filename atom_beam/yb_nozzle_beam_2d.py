@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """2D free-molecular Monte Carlo of the Yb oven nozzle channel array.
 
 Refs: Senaratne et al., RSI 86, 023105 (2015); Giordmaine & Wang, JAP 31, 463
