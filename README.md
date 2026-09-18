@@ -25,4 +25,4 @@ If you wish to set different parameters, please edit the file, most flags are at
 
 
 ## Maintainers + contact:
-jaden.al-aidroos@mail.utoronto.ca --- GH @Jadenthealmighty
+jaden.alaidroos@mail.utoronto.ca --- GH @Jadenthealmighty
