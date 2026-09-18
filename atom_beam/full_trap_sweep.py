@@ -887,7 +887,6 @@ def tabulate_axial_force(run, eqn, norm, n_offset=None, v_max_ms=None,
     phase_space_plots.build_phase_space_force_grid generalised from one
     (z, v) plane on the trap axis to a stack of (s, v) planes at different
     transverse offsets."""
-    x0, v0 = norm["x0"], norm["v0"] # MODIFIED 9/18
     if v_max_ms is None or n_v is None:
         auto_lo, auto_hi, auto_n, _ = auto_velocity_grid(norm,
                                                          _slower_detuning_hz())
@@ -921,9 +920,6 @@ def tabulate_axial_force(run, eqn, norm, n_offset=None, v_max_ms=None,
                 f"over {n_workers} process{'es' if n_workers > 1 else ''}")
 
     t_start = time.time()
-    S, V = np.meshgrid(s_mm * 1e-3 / x0, v_ms / v0, indexing="ij") # MODIFIED 9/18
-    L_m = NOZZLE_TO_TRAP_MM * 1e-3 # MODIFIED 9/18
-    F_S = np.repeat(((s_mm * 1e-3 + L_m) / L_m)[:, None], v_ms.size, axis=1) # MODIFIED 9/18
     for i, bh in enumerate(offs_mm):
         for j, bv in enumerate(offs_mm):
             base = (bh * 1e-3 * E_H + bv * 1e-3 * E_V) / x0
@@ -1089,17 +1085,8 @@ def build_capture_map(run, norm, offs_mm, s_mm, v_ms, a_grid, verbose=True):
 
     vc = np.zeros((n_offset, n_offset))
     t_stop = np.zeros((n_offset, n_offset))
+
     t_start = time.time()
-
-    #MODIFIED 9/18
-    ladder = np.linspace(v_max_ms / N_V_SCAN, v_max_ms * 0.95, N_V_SCAN) # modified 9/18
-    tasks = [(i, j, a_grid[i, j]) for i in range(n_offset)
-             for j in range(n_offset)]
-    n_workers = worker_count(len(tasks))
-    state = dict(norm=norm, s_bar=s_bar, v_bar=v_bar, s_mm=s_mm,
-                 v_max_ms=v_max_ms)
-    # END MODIFIED 9/18
-
     for i in range(n_offset):
         for j in range(n_offset):
             interp = (s_bar, v_bar, a_grid[i, j])
