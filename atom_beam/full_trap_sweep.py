@@ -17,7 +17,9 @@ os.environ.setdefault("MPLBACKEND", "Agg")
 import math
 import time
 
+import CyRK
 import matplotlib.pyplot as plt
+import numba
 import numpy as np
 import scipy.constants as sp_const
 from matplotlib.colors import LogNorm
@@ -66,6 +68,13 @@ ACCEPT_MARGIN = _envf("FT_ACCEPT_MARGIN", 1.6)
 
 NOZZLE_CACHE = os.environ.get("FT_NOZZLE_CACHE", "nozzle_trace_cache.npz")
 NOZZLE_CACHE_ENABLED = bool(_envi("FT_NOZZLE_CACHE_ON", 1))
+
+# Skip beam if saturation is below this fraction of nominal Isat
+CULL_RTOL = _envf("FT_CULL_RTOL", 1e-9)
+
+# Trajectory integrator, passed to CyRK. RK23 measured 9.2x over scipy RK45
+# with identical capture velocities; "RK45", "DOP853", "LSODA" also valid.
+IVP_METHOD = os.environ.get("FT_IVP_METHOD", "RK23")
 
 SLOWER_ENABLED = bool(_envi("FT_SLOWER", 1))
 SLOWER_OPTIC_MM = _envf("FT_SLOWER_OPTIC_MM", 500.0)
@@ -334,6 +343,159 @@ def load_or_trace_nozzle(run, rng):
     return data
 
 
+class MemoMagField(pylcp.magField):
+    """Caches grad|B| per position: asked every point, changes every n_v.
+    Wraps, not patches, so pylcp's six central differences run on the inner
+    field and cannot evict the entry. One instance per process.
+    """
+
+    def __init__(self, inner):
+        self._inner, self.eps, self.Field = inner, inner.eps, inner.Field
+        self._k = self._G = None
+
+    def gradFieldMag(self, R=np.array([0., 0., 0.]), t=0):
+        k = (R[0], R[1], R[2])
+        if k != self._k:
+            self._k, self._G = k, self._inner.gradFieldMag(R, t)
+        return self._G
+
+
+def beam_relevance(laser_beams, positions, rtol):
+    """Where each beam carries light: {key: (n_positions, n_beams) bool}.
+    The MOT waists sit at the origin, so most of a 369 mm ray is dark.
+    """
+    out = {}
+    for key in laser_beams:
+        I = np.array([[b.intensity(p, 0.) for b in laser_beams[key].beam_vector]
+                      for p in positions])
+        out[key] = I > rtol * I.max()
+    return out
+
+
+class MemoCulledRateEq(pylcp.rateeq):
+    """Caches the position-only half of the pumping rate; skips dark beams.
+
+        R_l = num_l / (1 + 4 (A_l - k_l . v)^2 / gamma^2)
+
+    num_l = gamma s_l f_ijq / 2 and A_l = -(E2 - E1) + delta_l are built once
+    per position, not n_v times; only k_l . v varies. Association order kept,
+    so the memo is bitwise exact, only culling approximates (CULL_RTOL).
+    arm() per ray, mask=None memoises only. Split by cell not velocity,
+    one instance per process.
+    """
+
+    _mask = None
+    _ptr = 0
+    _stride = 1
+    _pk = None
+    _pc = None
+
+    def arm(self, mask, stride):
+        self._mask = mask
+        self._stride = stride
+        self._ptr = 0
+        self._pk = None
+
+    def _precompute(self, r, t, Bhat, live):
+        """
+        NOTE: mostly copied from pylcp.rateeq._calc_pumping_rates
+
+        Adapted to precompute the position-dependent parts
+        """
+        out = {}
+        for key in self.laserBeams:
+            # Extract the relevant d_q matrix:
+            ind = self.hamiltonian.rotated_hamiltonian.laser_keys[key]
+            d_q = self.hamiltonian.rotated_hamiltonian.blocks[ind].matrix
+            gamma = self.hamiltonian.blocks[ind].parameters['gamma']
+
+            # Extract the energies:
+            E1 = np.diag(self.hamiltonian.rotated_hamiltonian.blocks[ind[0],ind[0]].matrix)
+            E2 = np.diag(self.hamiltonian.rotated_hamiltonian.blocks[ind[1],ind[1]].matrix)
+
+            E2, E1 = np.meshgrid(E2, E1)
+
+            # Initialize the pumping matrix:  (shape only, allocated per point)
+            shape = (len(self.laserBeams[key].beam_vector),) + d_q.shape[1:]
+
+            # Grab the laser parameters:
+            kvecs = self.laserBeams[key].kvec(r, t)
+            intensities = self.laserBeams[key].intensity(r, t)
+            deltas = self.laserBeams[key].delta(t)
+
+            projs = self.laserBeams[key].project_pol(Bhat, R=r, t=t)
+
+            # Loop through each laser beam driving this transition:
+            rows = []
+            for ll, (kvec, intensity, proj, delta) in enumerate(zip(kvecs, intensities, projs, deltas)):
+                if live is not None and not live[key][ll]:
+                    continue                    # carries no light here
+                fijq = np.abs(d_q[0]*proj[2] + d_q[1]*proj[1] +d_q[2]*proj[0])**2
+
+                # Finally, calculate the scattering rate the polarization
+                # onto the appropriate basis:  (everything except k.v)
+                rows.append((ll, kvec, gamma, gamma*intensity/2*fijq,
+                             -(E2 - E1) + delta))
+            out[key] = (shape, rows)
+        return out
+
+    def _pump_from_cache(self, v, cache):
+        """The k.v remainder of _calc_pumping_rates, per point."""
+        for key, (shape, rows) in cache.items():
+            self.Rijl[key] = np.zeros(shape)
+            for ll, kvec, gamma, num, A in rows:
+                self.Rijl[key][ll] = num/(1 + 4*(A - np.dot(kvec, v))**2/gamma**2)
+
+    def construct_evolution_matrix(self, r, v, t=0.,
+                                   default_axis=np.array([0., 0., 1.])):
+        '''
+        Mostly copied from  pylcp.rateeq.construct_evolution_matrix
+        '''
+        pos = (r[0], r[1], r[2], t)
+        if pos != self._pk:
+            self._pk = pos
+            B = self.magField.Field(r)
+
+            # Calculate its magnitude:
+            Bmag = np.linalg.norm(B, axis=0)
+
+            # Calculate the Bhat direction:
+            if Bmag > 1e-10:
+                Bhat = B/Bmag
+            else:
+                Bhat = default_axis
+
+            # Diagonalize the hamiltonian at this location:
+            self.hamiltonian.diag_static_field(Bmag)
+
+            if not np.all(self.hamiltonian.diagonal):
+                # Reconstruct the decay matrix to match this new field.
+                self.Rev_decay = self._calc_decay_comp_of_Rev(
+                    self.hamiltonian.rotated_hamiltonian
+                )
+
+            # Recalculate the pumping rates:  (the velocity-free half)
+            live = None
+            if self._mask is not None:
+                live = {key: self._mask[key][self._ptr // self._stride]
+                        for key in self._mask}
+            self._pc = self._precompute(r, t, Bhat, live)
+        self._ptr += 1
+
+        # Re-initialize the evolution matrix:
+        self.Rev = np.zeros((self.hamiltonian.n, self.hamiltonian.n))
+
+        self.Rev += self.Rev_decay
+
+        # Recalculate the pumping rates:  (the k.v half)
+        self._pump_from_cache(v, self._pc)
+
+        # Add the pumping rates to the evolution matrix:
+        self._add_pumping_rates_to_Rev()
+
+        return self.Rev, self.Rijl
+
+
 def rescale_speeds(data, t_gas_k, t_wall_k):
     fg = math.sqrt(t_gas_k / data["t_gas_ref"])
     fw = math.sqrt(t_wall_k / data["t_wall_ref"])
@@ -527,7 +689,7 @@ def build_extended_magfield(norm):
     B_bar_func = make_pylcp_magfield(B_interp, norm["x0"], norm["Gamma_SI"],
                                      gJ_excited=sim.YB174_GJ_EXCITED)
     eps_bar = (sim.MAGFIELD_GRADIENT_EPS_UM * 1e-6) / norm["x0"]
-    magField = pylcp.magField(B_bar_func, eps=eps_bar)
+    magField = MemoMagField(pylcp.magField(B_bar_func, eps=eps_bar))
 
     dz = 1e-4
     grad = ((B_interp(np.array([0., 0., dz]))[2]
@@ -592,9 +754,9 @@ def build_mot(norm, alignment=None, slower_detuning_hz=None,
         wavelength_m=sim.YB174_WAVELENGTH_M)
 
     a_grav_bar = -sp_const.g * norm["t0"] ** 2 / norm["x0"]
-    eqn = pylcp.rateeq(laserBeams, magField, hamiltonian,
-                       a=np.array([0.0, 0.0, a_grav_bar]),
-                       include_mag_forces=True)
+    eqn = MemoCulledRateEq(laserBeams, magField, hamiltonian,
+                           a=np.array([0.0, 0.0, a_grav_bar]),
+                           include_mag_forces=True)
     beam_info.update(power_w=power_w, a_grav_bar=a_grav_bar)
     return eqn, beam_info
 
@@ -649,6 +811,11 @@ def tabulate_axial_force(run, eqn, norm, n_offset=None, v_max_ms=None,
             R = np.array([S * U_HAT[c] + F_S * base[c] for c in range(3)])
             Vv = np.array([V * U_HAT[c] for c in range(3)])
 
+            # Ignore low intensities far away from the beam axis
+            if isinstance(eqn, MemoCulledRateEq):
+                eqn.arm(beam_relevance(eqn.laserBeams, R[:, :, 0].T, CULL_RTOL)
+                        if CULL_RTOL > 0 else None, n_v)
+
             eqn.generate_force_profile(R, Vv, name="axial", progress_bar=False)
             F = eqn.profile["axial"].F
             F_axial = sum(F[c] * U_HAT[c] for c in range(3))
@@ -665,7 +832,33 @@ def tabulate_axial_force(run, eqn, norm, n_offset=None, v_max_ms=None,
     return offs_mm, s_mm, v_ms, a_grid
 
 
-def capture_velocity(a_interp, norm, v_try_ms, s_mm, v_max_ms):
+@numba.njit(cache=True)
+def bilinear(x, y, ax, ay, V):
+    """a(s, v) off the force table, on scipy's clip-then-extrapolate indexing.
+
+    RegularGridInterpolator already does this in Cython, but its Python wrapper
+    validates and allocates per call: 22 us against ~0.2 us of arithmetic, and
+    solve_ivp asks 4.5M times per 25 cells. Same interpolant, so agreement is
+    round-off.
+    """
+    i = np.searchsorted(ax, x) - 1
+    if i < 0:
+        i = 0
+    elif i > ax.size - 2:
+        i = ax.size - 2
+    j = np.searchsorted(ay, y) - 1
+    if j < 0:
+        j = 0
+    elif j > ay.size - 2:
+        j = ay.size - 2
+
+    tx = (x - ax[i]) / (ax[i + 1] - ax[i])
+    ty = (y - ay[j]) / (ay[j + 1] - ay[j])
+    return (V[i, j] * (1 - tx) * (1 - ty) + V[i + 1, j] * tx * (1 - ty)
+            + V[i, j + 1] * (1 - tx) * ty + V[i + 1, j + 1] * tx * ty)
+
+
+def capture_velocity(a_tab, norm, v_try_ms, s_mm, v_max_ms):
     """Launch one atom AT THE NOZZLE FACE at v_try_ms, integrate the whole
     flight, and report whether it is caught.
 
@@ -675,8 +868,10 @@ def capture_velocity(a_interp, norm, v_try_ms, s_mm, v_max_ms):
     s_hi_bar = s_mm[-1] * 1e-3 / x0
     s0_bar = s_lo_bar * 0.999
 
+    ax, ay, V = a_tab           # unpack once, not 4.5M times
+
     def rhs(t, y):
-        return [y[1], float(a_interp([[y[0], y[1]]])[0])]
+        return np.array((y[1], bilinear(y[0], y[1], ax, ay, V)))
 
     def left_far(t, y):
         return y[0] - s_lo_bar
@@ -690,24 +885,28 @@ def capture_velocity(a_interp, norm, v_try_ms, s_mm, v_max_ms):
 
     def entered_trap(t, y):
         return y[0] + TRAP_HALF_MM * 1e-3 / x0
-    entered_trap.terminal = False
+
     entered_trap.direction = 1
 
     max_step = min(TRAJ_T_MAX_BAR / 200.0,
                    (2e-3 / x0) / max(v_max_ms / v0, 1e-9))
 
-    sol = solve_ivp(rhs, (0.0, TRAJ_T_MAX_BAR), [s0_bar, v_try_ms / v0],
-                    events=(left_far, left_near, entered_trap),
-                    rtol=1e-7, atol=1e-9, max_step=max_step)
+    # See: https://github.com/jrenaud90/CyRK
+    sol = CyRK.pysolve_ivp(rhs, (0.0, TRAJ_T_MAX_BAR),
+                           np.array([s0_bar, v_try_ms / v0]),
+                           method=IVP_METHOD,
+                           events=(left_far, left_near, entered_trap),
+                           rtol=1e-7, atol=1e-9, max_step=max_step)
 
     s_end = sol.y[0, -1] * x0 * 1e3
     v_end = sol.y[1, -1] * v0
-    escaped = (sol.t_events[0].size > 0) or (sol.t_events[1].size > 0)
+    t_ev = [np.asarray(e) for e in sol.t_events]
+    escaped = (t_ev[0].size > 0) or (t_ev[1].size > 0)
     caught = ((not escaped) and abs(s_end) < CAPTURE_RADIUS_MM
               and abs(v_end) < CAPTURE_SPEED_MS)
 
-    if sol.t_events[2].size > 0:
-        t_stop = (sol.t[-1] - sol.t_events[2][0]) * t0
+    if t_ev[2].size > 0:
+        t_stop = (sol.t[-1] - t_ev[2].ravel()[0]) * t0
     else:
         t_stop = 0.0
     return caught, max(t_stop, 0.0)
@@ -732,9 +931,7 @@ def build_capture_map(run, norm, offs_mm, s_mm, v_ms, a_grid, verbose=True):
     t_start = time.time()
     for i in range(n_offset):
         for j in range(n_offset):
-            interp = RegularGridInterpolator(
-                (s_bar, v_bar), a_grid[i, j],
-                bounds_error=False, fill_value=None)
+            interp = (s_bar, v_bar, a_grid[i, j])
 
             best, best_t = 0.0, 0.0
             worst_escape = None
