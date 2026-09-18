@@ -12,9 +12,23 @@ important note:
 
 import os
 
-os.environ.setdefault("MPLBACKEND", "Agg")
 
+def _pin_blas_threads():
+    """One BLAS thread per process, set BEFORE numpy is imported...
+
+    Every grid point is a small linear solve, so BLAS threading doesn't make faster"""
+    for var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
+                "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"):
+        os.environ.setdefault(var, "1")
+
+
+os.environ.setdefault("MPLBACKEND", "Agg")
+_pin_blas_threads()
+
+import contextlib
+import io
 import math
+import multiprocessing as mp
 import time
 
 import CyRK
@@ -81,8 +95,8 @@ SLOWER_OPTIC_MM = _envf("FT_SLOWER_OPTIC_MM", 500.0)
 SLOWER_W_OPTIC_M = _envf("FT_SLOWER_W_OPTIC_M", 0.005)
 SLOWER_DIVERGENCE_MRAD = _envf("FT_SLOWER_DIV_MRAD", 0.0)
 SLOWER_FOCUS_MM = _envf("FT_SLOWER_FOCUS_MM", 0.0)
-SLOWER_AVG_SAT = _envf("FT_SLOWER_AVG_SAT", 0.4)
-SLOWER_DETUNING_HZ = _envf("FT_SLOWER_DETUNING_HZ", -100868000)
+SLOWER_AVG_SAT = _envf("FT_SLOWER_AVG_SAT", 0.5)
+SLOWER_DETUNING_HZ = _envf("FT_SLOWER_DETUNING_HZ", -104048000)
 SLOWER_POL = _envi("FT_SLOWER_POL", -1)
 SLOWER_TILT_MDEG = (_envf("FT_SLOWER_TILT1_MDEG", 0.0),
                     _envf("FT_SLOWER_TILT2_MDEG", 0.0))
@@ -95,7 +109,10 @@ MOT_BEAM_OFFSET_MM = {
 MOT_BEAM_TILT_MDEG = {
 }
 
-TOLERANCE_ENABLED = bool(_envi("FT_TOLERANCE", 1))
+
+OPT_CURRENT_A = 42.0
+
+TOLERANCE_ENABLED = bool(_envi("FT_TOLERANCE", 0))
 TOL_MARGIN_MM = _envf("FT_TOL_MARGIN_MM", 3.0)
 TIME_BUDGET_H = _envf("FT_TIME_BUDGET_H", 1)
 TOL_N_V = _envi("FT_TOL_N_V", 41)
@@ -105,7 +122,7 @@ TOL_MOT_OFFSET_MM = tuple(float(x) for x in os.environ.get(
 TOL_MOT_BEAM_INDEX = _envi("FT_TOL_MOT_BEAM", 0)
 TOL_SLOWER_DIV_MRAD = tuple(float(x) for x in os.environ.get(
     "FT_TOL_SLOWER_DIVS", "0,1,2,4,8,16,32").split(","))
-SLOWER_DETUNING_SCAN = bool(_envi("FT_SLOWER_SCAN", 1))
+SLOWER_DETUNING_SCAN = bool(_envi("FT_SLOWER_SCAN", 0))
 TOL_SLOWER_DETUNING_GAMMA = tuple(float(x) for x in os.environ.get(
     "FT_SLOWER_DETUNINGS", "-0.5,-1,-2,-3,-4,-6").split(","))
 
@@ -124,6 +141,9 @@ V_AUTO_ESCALATE = bool(_envi("FT_V_ESCALATE", 1))
 V_MAX_GRID_POINTS = _envi("FT_V_MAX_POINTS", 161)
 
 FIELD_CHUNK = _envi("FT_FIELD_CHUNK", 4000)
+
+N_WORKERS = _envi("FT_N_WORKERS", 0)
+RESERVED_CPUS = _envi("FT_RESERVED_CPUS", 2)
 
 TRAJ_T_MAX_BAR = _envf("FT_TRAJ_T_MAX_BAR", 8.0e6)
 CAPTURE_RADIUS_MM = _envf("FT_CAPTURE_RADIUS_MM", 5.0)
@@ -644,10 +664,31 @@ def auto_velocity_grid(norm, slower_detuning_hz):
     return v_min, v_max, n_v, v_res
 
 
-def build_extended_magfield(norm):
-    """Tabulate the coil field over the WHOLE flight path, not just the trap"""
-    from coil_field_model import (oswald_coil_bfield, REFERENCE_CURRENT_A,
-                                  grid_field_interpolator, make_pylcp_magfield)
+def worker_count(n_tasks):
+    """How many processes to fan out over, never more than there are tasks.
+
+    FT_N_WORKERS sets it outright. Otherwise every logical CPU is used except
+    FT_RESERVED_CPUS, which defaults to 2 so one full physical core (both its
+    SMT threads) stays free for whatever else shares the machine.
+    """
+    n = N_WORKERS if N_WORKERS > 0 else (os.cpu_count() or 1) - RESERVED_CPUS
+    return max(1, min(n, n_tasks))
+
+
+_FIELD_TABLE = None
+
+
+def extended_field_table():
+    """Sample the 1 A coil field on a grid covering the whole flight path.
+
+    Returns (points_m, B_tesla, info), cached after the first call and handed
+    to worker processes so they do not each repeat the 128-loop sum.
+    """
+    global _FIELD_TABLE
+    if _FIELD_TABLE is not None:
+        return _FIELD_TABLE
+
+    from coil_field_model import oswald_coil_bfield, REFERENCE_CURRENT_A
 
     b_max = TRAP_HALF_MM * 1.4 * 1e-3
     s_lo, s_hi = -NOZZLE_TO_TRAP_MM * 1e-3, S_PAST_TRAP_MM * 1e-3
@@ -681,10 +722,26 @@ def build_extended_magfield(norm):
         hi_i = min(lo_i + FIELD_CHUNK, pts.shape[0])
         B_unit[lo_i:hi_i] = oswald_coil_bfield(pts[lo_i:hi_i],
                                                REFERENCE_CURRENT_A)
+    info = dict(n_points=pts.shape[0], build_s=time.time() - t0,
+                shape=(xs.size, ys.size, zs.size),
+                extent_mm=[[lo[i] * 1e3, hi[i] * 1e3] for i in range(3)])
+    _FIELD_TABLE = (pts, B_unit, info)
+    return _FIELD_TABLE
+
+
+def build_extended_magfield(norm, table=None):
+    """Tabulate the coil field over the WHOLE flight path, not just the trap
+
+    Pass a table from extended_field_table() to skip the sampling"""
+    from coil_field_model import (REFERENCE_CURRENT_A, grid_field_interpolator,
+                                  make_pylcp_magfield)
+
+    pts, B_unit, table_info = (extended_field_table() if table is None
+                               else table)
     interp_unit = grid_field_interpolator(pts, B_unit)
 
     def B_interp(xyz_meters):
-        return interp_unit(xyz_meters) * (40.0 / REFERENCE_CURRENT_A)
+        return interp_unit(xyz_meters) * (OPT_CURRENT_A / REFERENCE_CURRENT_A)
 
     B_bar_func = make_pylcp_magfield(B_interp, norm["x0"], norm["Gamma_SI"],
                                      gJ_excited=sim.YB174_GJ_EXCITED)
@@ -694,11 +751,7 @@ def build_extended_magfield(norm):
     dz = 1e-4
     grad = ((B_interp(np.array([0., 0., dz]))[2]
              - B_interp(np.array([0., 0., -dz]))[2]) / (2 * dz) * 1e4 * 1e-2)
-    info = dict(n_points=pts.shape[0], build_s=time.time() - t0,
-                shape=(xs.size, ys.size, zs.size),
-                extent_mm=[[lo[i] * 1e3, hi[i] * 1e3] for i in range(3)],
-                gradient_G_per_cm=grad)
-    return magField, info
+    return magField, dict(table_info, gradient_G_per_cm=grad)
 
 
 def build_mot(norm, alignment=None, slower_detuning_hz=None,
@@ -761,9 +814,72 @@ def build_mot(norm, alignment=None, slower_detuning_hz=None,
     return eqn, beam_info
 
 
+def mot_spec(norm, alignment=None, slower_detuning_hz=None,
+             slower_divergence_mrad=None):
+    """description of build_mot() call, have this cuz need all workers to have same
+
+    pylcp objects hold closures over the field interpolator and do not pickle,
+    so a worker gets the arguments and builds its own copy.
+    """
+    return dict(norm=norm, field_table=extended_field_table(),
+                alignment=alignment, slower_detuning_hz=slower_detuning_hz,
+                slower_divergence_mrad=slower_divergence_mrad)
+
+
+_force_worker = {}
+
+
+def _force_worker_init(spec):
+    """Rebuild one rate-equation object per worker process"""
+    with contextlib.redirect_stdout(io.StringIO()):
+        magField, _ = build_extended_magfield(spec["norm"],
+                                              table=spec["field_table"])
+        eqn, _ = build_mot(spec["norm"], alignment=spec["alignment"],
+                           slower_detuning_hz=spec["slower_detuning_hz"],
+                           slower_divergence_mrad=spec["slower_divergence_mrad"],
+                           magField=magField)
+    _force_worker.update(spec)
+    _force_worker["eqn"] = eqn
+
+
+def _force_worker_cell(task):
+    """One (offset h, offset v) plane of the force grid, in a worker."""
+    i, j, bh, bv = task
+    st = _force_worker
+    return i, j, _force_cell(st["eqn"], st["norm"], bh, bv, st["s_mm"],
+                             st["v_ms"])
+
+
+def _force_cell(eqn, norm, bh_mm, bv_mm, s_mm, v_ms):
+    """Axial acceleration over the (s, v_s) plane at one transverse offset."""
+    x0, v0 = norm["x0"], norm["v0"]
+    S, V = np.meshgrid(s_mm * 1e-3 / x0, v_ms / v0, indexing="ij")
+    L_m = NOZZLE_TO_TRAP_MM * 1e-3
+    F_S = np.repeat(((s_mm * 1e-3 + L_m) / L_m)[:, None], v_ms.size, axis=1)
+    base = (bh_mm * 1e-3 * E_H + bv_mm * 1e-3 * E_V) / x0
+    R = np.array([S * U_HAT[c] + F_S * base[c] for c in range(3)])
+    Vv = np.array([V * U_HAT[c] for c in range(3)])
+    eqn.generate_force_profile(R, Vv, name="axial", progress_bar=False)
+    F = eqn.profile["axial"].F
+    return sum(F[c] * U_HAT[c] for c in range(3)) / norm["mass_bar"]
+
+
+
+def _grid_progress(run, n_done, n_tasks, per_cell, t_start, verbose):
+    """Progress for a cell-by-cell grid"""
+    rate = n_done * per_cell / max(time.time() - t_start, 1e-9)
+    tabulate_axial_force.last_rate = rate
+    if not verbose:
+        return
+    run.log(step=n_done * per_cell, force_grid_points_per_second=rate)
+    if n_done % max(1, n_tasks // 10) == 0 or n_done == n_tasks:
+        run.say(f"  {n_done}/{n_tasks} offset cells, "
+                f"{n_done * per_cell:,} points, {rate:.0f} pts/s")
+
+
 def tabulate_axial_force(run, eqn, norm, n_offset=None, v_max_ms=None,
                          n_v=None, verbose=True, offsets_mm=None,
-                         v_min_ms=None):
+                         v_min_ms=None, spec=None):
     """Tabulate the steady-state optical force projected onto the atom-beam
     axis, on a 4D grid of (offset h, offset v, axial position s, axial
     velocity v_s)
@@ -777,6 +893,7 @@ def tabulate_axial_force(run, eqn, norm, n_offset=None, v_max_ms=None,
         v_max_ms = auto_hi if v_max_ms is None else v_max_ms
         n_v = auto_n if n_v is None else n_v
         if v_min_ms is None:
+
             v_min_ms = auto_lo
 
     if offsets_mm is None:
@@ -788,21 +905,19 @@ def tabulate_axial_force(run, eqn, norm, n_offset=None, v_max_ms=None,
                        v_max_ms, n_v)
     n_s = s_mm.size
 
-    x0, v0 = norm["x0"], norm["v0"]
     a_grid = np.zeros((n_offset, n_offset, n_s, n_v))
 
-    total = n_offset * n_offset * n_s * n_v
+    tasks = [(i, j, bh, bv) for i, bh in enumerate(offs_mm)
+             for j, bv in enumerate(offs_mm)]
+    per_cell = n_s * n_v
+    total = len(tasks) * per_cell
+    n_workers = worker_count(len(tasks)) if spec is not None else 1
     if verbose:
         run.say(f"tabulating the equilibrium force on a "
                 f"{n_offset}x{n_offset}x{n_s}x{n_v} = {total:,} point grid, "
                 f"axial span {s_mm[0]:.0f} to {s_mm[-1]:.0f} mm "
-                "(each point a steady-state solve, no time integration)")
-
-    S, V = np.meshgrid(s_mm * 1e-3 / x0, v_ms / v0, indexing="ij")
-
-    L_m = NOZZLE_TO_TRAP_MM * 1e-3
-    f_s = (s_mm * 1e-3 + L_m) / L_m
-    F_S = np.repeat(f_s[:, None], n_v, axis=1)
+                f"(each point a steady-state solve, no time integration), "
+                f"over {n_workers} process{'es' if n_workers > 1 else ''}")
 
     t_start = time.time()
     for i, bh in enumerate(offs_mm):
@@ -912,12 +1027,56 @@ def capture_velocity(a_tab, norm, v_try_ms, s_mm, v_max_ms):
     return caught, max(t_stop, 0.0)
 
 
-def build_capture_map(run, norm, offs_mm, s_mm, v_ms, a_grid, verbose=True):
-    """Turn the tabulated force into v_c(h, v): the largest axial speed the
-    trap can still catch at each transverse offset, plus the time the
-    marginal atom spends decelerating.
+def _capture_cell(norm, s_bar, v_bar, a_cell, s_mm, v_max_ms):
+    """Largest catchable launch speed at one transverse offset, and the time
+    the marginal atom spends decelerating."""
+    interp = RegularGridInterpolator((s_bar, v_bar), a_cell,
+                                     bounds_error=False, fill_value=None)
+    ladder = np.linspace(v_max_ms / N_V_SCAN, v_max_ms * 0.95, N_V_SCAN)
 
-    A coarse ladder is scanned first, then refined by bisection, maybe try to speed up """
+    best, best_t = 0.0, 0.0
+    worst_escape = None
+    for vt in ladder:
+        caught, ts = capture_velocity(interp, norm, vt, s_mm, v_max_ms)
+        if caught:
+            best, best_t = vt, ts
+            worst_escape = None
+        elif worst_escape is None and best > 0:
+            worst_escape = vt
+
+    if worst_escape is not None:
+        lo, hi, lo_t = best, worst_escape, best_t
+        for _ in range(N_V_BISECT):
+            mid = 0.5 * (lo + hi)
+            caught, ts = capture_velocity(interp, norm, mid, s_mm, v_max_ms)
+            if caught:
+                lo, lo_t = mid, ts
+            else:
+                hi = mid
+        best, best_t = lo, lo_t
+
+    return best, best_t
+
+
+_capture_worker = {}
+
+
+def _capture_worker_init(state):
+    """Constants every capture-map cell needs, stored once per worker."""
+    _capture_worker.update(state)
+
+
+def _capture_worker_cell(task):
+    """One cell of the capture map, in a worker."""
+    i, j, a_cell = task
+    st = _capture_worker
+    best, best_t = _capture_cell(st["norm"], st["s_bar"], st["v_bar"], a_cell,
+                                 st["s_mm"], st["v_max_ms"])
+    return i, j, best, best_t
+
+
+def build_capture_map(run, norm, offs_mm, s_mm, v_ms, a_grid, verbose=True):
+   
     x0, v0 = norm["x0"], norm["v0"]
     s_bar = s_mm * 1e-3 / x0
     v_bar = v_ms / v0
@@ -926,7 +1085,6 @@ def build_capture_map(run, norm, offs_mm, s_mm, v_ms, a_grid, verbose=True):
 
     vc = np.zeros((n_offset, n_offset))
     t_stop = np.zeros((n_offset, n_offset))
-    ladder = np.linspace(v_max_ms / N_V_SCAN, v_max_ms * 0.95, N_V_SCAN)
 
     t_start = time.time()
     for i in range(n_offset):
@@ -958,10 +1116,29 @@ def build_capture_map(run, norm, offs_mm, s_mm, v_ms, a_grid, verbose=True):
             vc[i, j] = best
             t_stop[i, j] = best_t
 
+    def record(n, i, j, best, best_t):
+        vc[i, j], t_stop[i, j] = best, best_t
         if verbose:
-            run.log(step=(i + 1) * n_offset,
-                    capture_map_rows_done=i + 1,
-                    capture_velocity_row_max_m_per_s=float(vc[i].max()))
+            run.log(step=n, capture_map_cells_done=n,
+                    capture_velocity_max_so_far_m_per_s=float(vc.max()))
+
+    t_start = time.time()
+    if verbose:
+        run.say(f"capture map: {len(tasks)} cells over {n_workers} "
+                f"process{'es' if n_workers > 1 else ''}")
+    if n_workers > 1:
+        with mp.get_context("spawn").Pool(
+                processes=n_workers, initializer=_capture_worker_init,
+                initargs=(state,)) as pool:
+            for n, (i, j, best, best_t) in enumerate(
+                    pool.imap_unordered(_capture_worker_cell, tasks,
+                                       chunksize=1), start=1):
+                record(n, i, j, best, best_t)
+    else:
+        for n, (i, j, a_cell) in enumerate(tasks, start=1):
+            best, best_t = _capture_cell(norm, s_bar, v_bar, a_cell, s_mm,
+                                         v_max_ms)
+            record(n, i, j, best, best_t)
 
     if verbose:
         run.say(f"capture map done in {time.time() - t_start:.0f} s: "
@@ -1040,7 +1217,10 @@ def rate_for_configuration(run, norm, data, magField, *, alignment=None,
                        magField=magField)
     offs_mm, s_mm, v_ms, a_grid = tabulate_axial_force(
         run, eqn, norm, n_offset=n_offset, v_max_ms=v_max_ms, n_v=n_v,
-        verbose=False, offsets_mm=offsets_mm, v_min_ms=v_min_ms)
+        verbose=False, offsets_mm=offsets_mm, v_min_ms=v_min_ms,
+        spec=mot_spec(norm, alignment=alignment,
+                      slower_detuning_hz=slower_detuning_hz,
+                      slower_divergence_mrad=slower_divergence_mrad))
     vc, t_stop = build_capture_map(run, norm, offs_mm, s_mm, v_ms, a_grid,
                                    verbose=False)
 
@@ -1092,6 +1272,8 @@ def _thin_sweeps(frac):
     TOL_MOT_OFFSET_MM = _thin(TOL_MOT_OFFSET_MM, frac)
     TOL_SLOWER_DIV_MRAD = _thin(TOL_SLOWER_DIV_MRAD, frac)
     TOL_SLOWER_DETUNING_GAMMA = TOL_SLOWER_DETUNING_GAMMA
+
+
 
 
 def run_tolerance_sweeps(run, norm, data, magField, window_mm=None,
@@ -1897,7 +2079,7 @@ def main():
         "Isat_mW_per_cm2": norm["Isat_mW_cm2"],
         "detuning_Hz": DETUNING_HZ,
         "detuning_over_Gamma": DETUNING_HZ / sim.YB174_LINEWIDTH_HZ,
-        "coil_current_A": 40.0,
+        "coil_current_A": OPT_CURRENT_A,
         "nozzle_atoms": NOZZLE_ATOMS,
         "n_channels": n3.N_CHAN_Y * n3.N_CHAN_Z,
         "channel_length_mm": n3.CHANNEL_LENGTH_MM,
@@ -1915,6 +2097,8 @@ def main():
         "mot_beam_offsets_mm": str(MOT_BEAM_OFFSET_MM),
         "mot_beam_tilts_mdeg": str(MOT_BEAM_TILT_MDEG),
         "seed": NOZZLE_SEED,
+        "logical_cpus": os.cpu_count(),
+        "worker_processes": worker_count(build_offset_grid()[0].size ** 2),
     }
 
     with runlog.start("yb-full-trap-sweep", params=json_safe(params),
@@ -1974,7 +2158,8 @@ def main():
                        "slowing_beam_geometry", close=True)
 
         offs_mm, s_mm, v_ms, a_grid = tabulate_axial_force(
-            run, eqn, norm, v_max_ms=v_max_ms, n_v=n_v, v_min_ms=v_min_ms)
+            run, eqn, norm, v_max_ms=v_max_ms, n_v=n_v, v_min_ms=v_min_ms,
+            spec=mot_spec(norm))
         grid_rate = getattr(tabulate_axial_force, "last_rate", 500.0)
         run.figure(fig_phase_portrait(norm, offs_mm, s_mm, v_ms, a_grid),
                    "phase_portrait_along_atom_beam", close=True)
@@ -1993,7 +2178,8 @@ def main():
                     f"{(v_max_ms - v_min_ms) / (n_v - 1):.2f} m/s spacing) "
                     f", escalation {escalations}/2")
             offs_mm, s_mm, v_ms, a_grid = tabulate_axial_force(
-                run, eqn, norm, v_max_ms=v_max_ms, n_v=n_v, v_min_ms=v_min_ms)
+                run, eqn, norm, v_max_ms=v_max_ms, n_v=n_v, v_min_ms=v_min_ms,
+                spec=mot_spec(norm))
             vc, t_stop = build_capture_map(run, norm, offs_mm, s_mm, v_ms,
                                            a_grid)
         if vc.max() > 0.85 * v_max_ms:

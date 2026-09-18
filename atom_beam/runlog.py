@@ -85,7 +85,7 @@ class Run:
     def figure(self, fig, name, close=True, dpi=150):
         """Save a matplotlib figure as <name>.png in the run folder."""
         path = self.out(f"{name}.png")
-        fig.savefig(path, dpi=dpi, bbox_inches="tight")
+        fig.savefig(path, dpi=dpi)
         if close:
             import matplotlib.pyplot as plt
             plt.close(fig)
