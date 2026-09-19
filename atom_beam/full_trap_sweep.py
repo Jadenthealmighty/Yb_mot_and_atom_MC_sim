@@ -859,6 +859,13 @@ def _force_cell(eqn, norm, bh_mm, bv_mm, s_mm, v_ms):
     base = (bh_mm * 1e-3 * E_H + bv_mm * 1e-3 * E_V) / x0
     R = np.array([S * U_HAT[c] + F_S * base[c] for c in range(3)])
     Vv = np.array([V * U_HAT[c] for c in range(3)])
+
+    # Per ray: cull dark beams, reset the position cache.
+    # R[:, :, 0] is the ray's positions, independent of velocity
+    if isinstance(eqn, MemoCulledRateEq):
+        eqn.arm(beam_relevance(eqn.laserBeams, R[:, :, 0].T, CULL_RTOL)
+                if CULL_RTOL > 0 else None, v_ms.size)
+
     eqn.generate_force_profile(R, Vv, name="axial", progress_bar=False)
     F = eqn.profile["axial"].F
     return sum(F[c] * U_HAT[c] for c in range(3)) / norm["mass_bar"]
@@ -920,42 +927,27 @@ def tabulate_axial_force(run, eqn, norm, n_offset=None, v_max_ms=None,
                 f"over {n_workers} process{'es' if n_workers > 1 else ''}")
 
     t_start = time.time()
-    for i, bh in enumerate(offs_mm):
-        for j, bv in enumerate(offs_mm):
-            base = (bh * 1e-3 * E_H + bv * 1e-3 * E_V) / x0
-            R = np.array([S * U_HAT[c] + F_S * base[c] for c in range(3)])
-            Vv = np.array([V * U_HAT[c] for c in range(3)])
-
-            # Ignore low intensities far away from the beam axis
-            if isinstance(eqn, MemoCulledRateEq):
-                eqn.arm(beam_relevance(eqn.laserBeams, R[:, :, 0].T, CULL_RTOL)
-                        if CULL_RTOL > 0 else None, n_v)
-
-            eqn.generate_force_profile(R, Vv, name="axial", progress_bar=False)
-            F = eqn.profile["axial"].F
-            F_axial = sum(F[c] * U_HAT[c] for c in range(3))
-            a_grid[i, j] = F_axial / norm["mass_bar"]
-
-        done = (i + 1) * n_offset * n_s * n_v
-        rate = done / max(time.time() - t_start, 1e-9)
-        tabulate_axial_force.last_rate = rate
-        if verbose:
-            run.log(step=done, force_grid_points_per_second=rate)
-            run.say(f"  offset row {i + 1}/{n_offset}, {done:,}/{total:,} "
-                    f"points, {rate:.0f} pts/s")
+    if n_workers > 1:
+        init = dict(spec, s_mm=s_mm, v_ms=v_ms)
+        with mp.get_context("spawn").Pool(
+                processes=n_workers, initializer=_force_worker_init,
+                initargs=(init,)) as pool:
+            for n, (i, j, cell) in enumerate(
+                    pool.imap_unordered(_force_worker_cell, tasks,
+                                       chunksize=1), start=1):
+                a_grid[i, j] = cell
+                _grid_progress(run, n, len(tasks), per_cell, t_start, verbose)
+    else:
+        for n, (i, j, bh, bv) in enumerate(tasks, start=1):
+            a_grid[i, j] = _force_cell(eqn, norm, bh, bv, s_mm, v_ms)
+            _grid_progress(run, n, len(tasks), per_cell, t_start, verbose)
 
     return offs_mm, s_mm, v_ms, a_grid
 
 
 @numba.njit(cache=True)
 def bilinear(x, y, ax, ay, V):
-    """a(s, v) off the force table, on scipy's clip-then-extrapolate indexing.
-
-    RegularGridInterpolator already does this in Cython, but its Python wrapper
-    validates and allocates per call: 22 us against ~0.2 us of arithmetic, and
-    solve_ivp asks 4.5M times per 25 cells. Same interpolant, so agreement is
-    round-off.
-    """
+    """a(s, v) off the force table, on scipy's clip-then-extrapolate indexing """
     i = np.searchsorted(ax, x) - 1
     if i < 0:
         i = 0
@@ -1030,8 +1022,7 @@ def capture_velocity(a_tab, norm, v_try_ms, s_mm, v_max_ms):
 def _capture_cell(norm, s_bar, v_bar, a_cell, s_mm, v_max_ms):
     """Largest catchable launch speed at one transverse offset, and the time
     the marginal atom spends decelerating."""
-    interp = RegularGridInterpolator((s_bar, v_bar), a_cell,
-                                     bounds_error=False, fill_value=None)
+    interp = (s_bar, v_bar, a_cell)
     ladder = np.linspace(v_max_ms / N_V_SCAN, v_max_ms * 0.95, N_V_SCAN)
 
     best, best_t = 0.0, 0.0
@@ -1086,35 +1077,11 @@ def build_capture_map(run, norm, offs_mm, s_mm, v_ms, a_grid, verbose=True):
     vc = np.zeros((n_offset, n_offset))
     t_stop = np.zeros((n_offset, n_offset))
 
-    t_start = time.time()
-    for i in range(n_offset):
-        for j in range(n_offset):
-            interp = (s_bar, v_bar, a_grid[i, j])
-
-            best, best_t = 0.0, 0.0
-            worst_escape = None
-            for vt in ladder:
-                caught, ts = capture_velocity(interp, norm, vt, s_mm, v_max_ms)
-                if caught:
-                    best, best_t = vt, ts
-                    worst_escape = None
-                elif worst_escape is None and best > 0:
-                    worst_escape = vt
-
-            if worst_escape is not None:
-                lo, hi, lo_t = best, worst_escape, best_t
-                for _ in range(N_V_BISECT):
-                    mid = 0.5 * (lo + hi)
-                    caught, ts = capture_velocity(interp, norm, mid, s_mm,
-                                                  v_max_ms)
-                    if caught:
-                        lo, lo_t = mid, ts
-                    else:
-                        hi = mid
-                best, best_t = lo, lo_t
-
-            vc[i, j] = best
-            t_stop[i, j] = best_t
+    tasks = [(i, j, a_grid[i, j]) for i in range(n_offset)
+             for j in range(n_offset)]
+    n_workers = worker_count(len(tasks))
+    state = dict(norm=norm, s_bar=s_bar, v_bar=v_bar, s_mm=s_mm,
+                 v_max_ms=v_max_ms)
 
     def record(n, i, j, best, best_t):
         vc[i, j], t_stop[i, j] = best, best_t
