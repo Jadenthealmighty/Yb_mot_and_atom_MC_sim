@@ -18,9 +18,9 @@ If you wish to set different parameters, please edit the file, most flags are at
 
 
 ## Going to add:
-- Radius sweep
-- Multi-threaded acceleration
-- Optimum map sweeps
+- full_trap_sweep sweeping
+- Interactor for the full_sweep
+- Guide for usage
 
 
 
