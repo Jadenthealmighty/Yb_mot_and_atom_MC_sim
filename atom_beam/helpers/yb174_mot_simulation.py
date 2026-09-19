@@ -36,7 +36,7 @@ def _prepare_events_compat(events):
 
 _pylcp_integration_tools.prepare_events = _prepare_events_compat
 
-from atom_beam.helpers.coil_field_model import (axial_gradient_G_per_cm,
+from coil_field_model import (axial_gradient_G_per_cm,
                               get_fast_bfield_interpolator,
                               make_pylcp_magfield)
 

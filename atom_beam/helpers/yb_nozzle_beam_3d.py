@@ -13,7 +13,7 @@ import numpy as np
 from matplotlib.patches import Rectangle, Wedge
 from matplotlib.ticker import FuncFormatter
 
-import atom_beam.helpers.yb_nozzle_beam_2d as m2d  # constants, the 2D cross-check, and Run
+import yb_nozzle_beam_2d as m2d  # constants, the 2D cross-check, and Run
 
 KB = m2d.KB
 AMU = m2d.AMU

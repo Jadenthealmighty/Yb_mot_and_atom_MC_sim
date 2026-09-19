@@ -43,9 +43,9 @@ from scipy.interpolate import RegularGridInterpolator
 import pylcp
 import runlog
 
-import atom_beam.helpers.trap_beams as tb
-import atom_beam.helpers.yb_nozzle_beam_3d as n3
-import atom_beam.helpers.yb174_mot_simulation as sim
+import helpers.trap_beams as tb
+import helpers.yb_nozzle_beam_3d as n3
+import helpers.yb174_mot_simulation as sim
 
 KB = sp_const.k
 
@@ -688,7 +688,7 @@ def extended_field_table():
     if _FIELD_TABLE is not None:
         return _FIELD_TABLE
 
-    from atom_beam.helpers.coil_field_model import oswald_coil_bfield, REFERENCE_CURRENT_A
+    from helpers.coil_field_model import oswald_coil_bfield, REFERENCE_CURRENT_A
 
     b_max = TRAP_HALF_MM * 1.4 * 1e-3
     s_lo, s_hi = -NOZZLE_TO_TRAP_MM * 1e-3, S_PAST_TRAP_MM * 1e-3
@@ -733,7 +733,7 @@ def build_extended_magfield(norm, table=None):
     """Tabulate the coil field over the WHOLE flight path, not just the trap
 
     Pass a table from extended_field_table() to skip the sampling"""
-    from atom_beam.helpers.coil_field_model import (REFERENCE_CURRENT_A, grid_field_interpolator,
+    from helpers.coil_field_model import (REFERENCE_CURRENT_A, grid_field_interpolator,
                                   make_pylcp_magfield)
 
     pts, B_unit, table_info = (extended_field_table() if table is None
