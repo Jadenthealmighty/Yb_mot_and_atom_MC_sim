@@ -18,7 +18,8 @@ from matplotlib.patches import Rectangle
 from matplotlib.ticker import FuncFormatter
 
 
-RESULTS_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results")
+RESULTS_ROOT = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "results")
 
 
 class Run:
