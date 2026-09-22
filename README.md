@@ -38,9 +38,7 @@ atom_beam/
     python full_trap_sweep.py
     python beam_sweep.py
 
-beam_sweep takes ~1 h for the default 5 x 5 grid and can be restarted if
-interrupted; finished points are reused. Settings are the `SW_*` variables at
-its top.
+beam_sweep takes ~1 h for the default 5 x 5 grid and can be restarted 
 
 
 
