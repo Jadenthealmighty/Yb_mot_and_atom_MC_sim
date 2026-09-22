@@ -65,14 +65,17 @@ T_STEP_C = _envf("FT_T_STEP_C", 1.0)
 NOZZLE_OFFSET_C = _envf("FT_NOZZLE_OFFSET_C", 30.0)
 
 
-# roughly what I found on fusion model
-NOZZLE_TO_TRAP_MM = _envf("FT_FLIGHT_MM", 344.0)
-TRAP_HALF_MM = _envf("FT_TRAP_HALF_MM", 10.0)
-
 BEAM_TILT_DEG = _envf("FT_BEAM_TILT_DEG", 25.5)
 
 BEAM_WAIST_M = _envf("FT_WAIST_M", 0.005)
 BEAM_AVG_SAT = _envf("FT_AVG_SAT", 0.1)
+
+
+# roughly what I found on fusion model
+NOZZLE_TO_TRAP_MM = _envf("FT_FLIGHT_MM", 344.0)
+TRAP_HALF_MM = max( BEAM_WAIST_M  * 1000, 10.0)
+
+
 
 NOZZLE_ATOMS = _envi("FT_NOZZLE_ATOMS", 1_200_000_000)
 NOZZLE_CHUNKS = _envi("FT_NOZZLE_CHUNKS", 1500)
