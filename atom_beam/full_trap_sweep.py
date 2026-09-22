@@ -110,7 +110,7 @@ MOT_BEAM_TILT_MDEG = {
 }
 
 
-OPT_CURRENT_A = 42.0
+OPT_CURRENT_A = _envf("FT_COIL_CURRENT_A", 42.0)
 
 TOLERANCE_ENABLED = bool(_envi("FT_TOLERANCE", 0))
 TOL_MARGIN_MM = _envf("FT_TOL_MARGIN_MM", 3.0)
@@ -324,22 +324,27 @@ def _nozzle_cache_key():
     )
 
 
+def nozzle_cache_mismatch():
+    """Settings the cached nozzle trace disagrees on: [] means reusable, None
+    means there is no cache. beam_sweep.py checks this before launching."""
+    if not (NOZZLE_CACHE_ENABLED and os.path.exists(NOZZLE_CACHE)):
+        return None
+    try:
+        z = np.load(NOZZLE_CACHE, allow_pickle=True)
+        cached = {k[4:]: z[k].item() for k in z.files if k.startswith("key_")}
+    except Exception as exc:
+        return [f"<unreadable: {exc}>"]
+    return [k for k, v in _nozzle_cache_key().items()
+            if k not in cached or not np.isclose(float(cached[k]), float(v))]
+
+
 def load_or_trace_nozzle(run, rng):
     """Added so that I would not need to rerun, please use the stuff in pre_computed"""
     key = _nozzle_cache_key()
-    if NOZZLE_CACHE_ENABLED and os.path.exists(NOZZLE_CACHE):
-        try:
-            z = np.load(NOZZLE_CACHE, allow_pickle=True)
-            cached = {k: v.item() if v.ndim == 0 else v
-                      for k, v in z.items() if k.startswith("key_")}
-            mismatch = [k for k, v in key.items()
-                        if k not in [c[4:] for c in cached]
-                        or not np.isclose(float(cached["key_" + k]), float(v))]
-        except Exception as exc:
-            run.say(f"nozzle cache at {NOZZLE_CACHE} unreadable ({exc}); "
-                    "retracing")
-            mismatch = ["<unreadable>"]
+    mismatch = nozzle_cache_mismatch()
+    if mismatch is not None:
         if not mismatch:
+            z = np.load(NOZZLE_CACHE, allow_pickle=True)
             data = {k: z[k] for k in ("y", "z", "dx", "dperp", "speed", "hits",
                                       "conv_steps", "conv_accept")}
             for k in ("n_launched", "n_tx", "n_direct", "n_accept", "W",

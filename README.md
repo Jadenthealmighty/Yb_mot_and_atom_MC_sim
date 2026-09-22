@@ -13,6 +13,8 @@ Also, CyRK uses `-mavx2 -mfma` to solve capture velocities, so it needs an x86-6
 ```
 atom_beam/
 ├── full_trap_sweep.py      full oven -> nozzle -> MOT capture
+├── beam_sweep.py           full_trap over slower saturation x beam radius
+├── power-sweep-table.csv   best coil current + slower detuning vs PEAK s0
 ├── runlog.py               terminal progress
 ├── nozzle_trace_cache.npz  cached nozzle trace, reused 
 ├── helpers/                importable modules, one package
@@ -34,6 +36,11 @@ atom_beam/
 
     cd atom_beam
     python full_trap_sweep.py
+    python beam_sweep.py
+
+beam_sweep takes ~1 h for the default 5 x 5 grid and can be restarted if
+interrupted; finished points are reused. Settings are the `SW_*` variables at
+its top.
 
 
 
