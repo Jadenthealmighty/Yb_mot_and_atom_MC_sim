@@ -33,7 +33,7 @@ def _floats(name, default):
     return tuple(float(x) for x in raw.split(",")) if raw else ()
 
 
-SLOWER_AVG_SATS = _floats("SW_SLOWER_AVG_SATS", "0.2,0.4,0.6,0.8,1.0")
+SLOWER_AVG_SATS = _floats("SW_SLOWER_AVG_SATS", "0.1,0.2,0.3,0.4,0.5")
 RADII_MM = _floats("SW_RADII_MM", "5,7.5,10,12.5,15")
 MOT_RADII_MM = _floats("SW_MOT_RADII_MM", "")
 SLOWER_POL = int(os.environ.get("SW_SLOWER_POL", "-1"))
@@ -272,7 +272,7 @@ def _style():
         "ytick.color": MUTED, "axes.grid": True, "grid.color": GRID,
         "grid.linewidth": 0.6, "grid.linestyle": "-",
         "axes.spines.top": False, "axes.spines.right": False,
-        "axes.titleweight": "bold", "axes.titlesize": 11,
+        "axes.titlesize": 11,
         "axes.titlecolor": INK, "lines.linewidth": 2.0,
         "lines.markersize": 7, "font.size": 10, "legend.frameon": False,
         "legend.fontsize": 9})
