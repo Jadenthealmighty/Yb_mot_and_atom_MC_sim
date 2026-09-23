@@ -146,7 +146,8 @@ N_WORKERS = _envi("FT_N_WORKERS", 0)
 RESERVED_CPUS = _envi("FT_RESERVED_CPUS", 2)
 
 TRAJ_T_MAX_BAR = _envf("FT_TRAJ_T_MAX_BAR", 8.0e6)
-CAPTURE_RADIUS_MM = BEAM_WAIST_M * 1000 #_envf("FT_CAPTURE_RADIUS_MM", 5.0)
+CAPTURE_AXIAL_MM = _envf("FT_CAPTURE_AXIAL_MM", BEAM_WAIST_M * 1000)
+CAPTURE_DRIFT_MM = _envf("FT_CAPTURE_DRIFT_MM", BEAM_WAIST_M * 1000)
 CAPTURE_SPEED_MS = _envf("FT_CAPTURE_SPEED_MS", 3.0)
 
 N_V_SCAN = _envi("FT_N_V_SCAN", 24)
@@ -544,7 +545,7 @@ def capture_probability(data, aux, T_c):
     two capture conditions:
 
         axial       v * cos(theta) < v_c(y, z)
-        transverse  v * sin(theta) * t_stop(y, z) < capture radius
+        transverse  v * sin(theta) * t_stop(y, z) < CAPTURE_DRIFT_MM
 
     An atom is caught if v is below the smaller of the two, so the joint
     probability is a single CDF evaluation
@@ -561,7 +562,7 @@ def capture_probability(data, aux, T_c):
     v_lim_axial = aux["vc_atom"] / dx
     denom = dperp * aux["ts_atom"]
     v_lim_trans = np.where(denom > 0,
-                           CAPTURE_RADIUS_MM * 1e-3 / np.maximum(denom, 1e-30),
+                           CAPTURE_DRIFT_MM * 1e-3 / np.maximum(denom, 1e-30),
                            np.inf)
 
     v_max = np.minimum(v_lim_axial, v_lim_trans)
@@ -974,7 +975,9 @@ def capture_velocity(a_tab, norm, v_try_ms, s_mm, v_max_ms):
     """Launch one atom AT THE NOZZLE FACE at v_try_ms, integrate the whole
     flight, and report whether it is caught.
 
-    Equation of motion in pylcp's normalized units"""
+    Equation of motion in pylcp's normalized units. Capture is a terminal
+    event, so t_stop is the time the atom takes to stop after entering the
+    trap region rather than whatever is left of TRAJ_T_MAX_BAR."""
     x0, v0, t0 = norm["x0"], norm["v0"], norm["t0"]
     s_lo_bar = s_mm[0] * 1e-3 / x0
     s_hi_bar = s_mm[-1] * 1e-3 / x0
@@ -1000,6 +1003,14 @@ def capture_velocity(a_tab, norm, v_try_ms, s_mm, v_max_ms):
 
     entered_trap.direction = 1
 
+    s_cap_bar = CAPTURE_AXIAL_MM * 1e-3 / x0
+    v_cap_bar = CAPTURE_SPEED_MS / v0
+
+    def captured(t, y):
+        return max(abs(y[0]) / s_cap_bar, abs(y[1]) / v_cap_bar) - 1.0
+    captured.terminal = True
+    captured.direction = -1
+
     max_step = min(TRAJ_T_MAX_BAR / 200.0,
                    (2e-3 / x0) / max(v_max_ms / v0, 1e-9))
 
@@ -1007,18 +1018,16 @@ def capture_velocity(a_tab, norm, v_try_ms, s_mm, v_max_ms):
     sol = CyRK.pysolve_ivp(rhs, (0.0, TRAJ_T_MAX_BAR),
                            np.array([s0_bar, v_try_ms / v0]),
                            method=IVP_METHOD,
-                           events=(left_far, left_near, entered_trap),
+                           events=(left_far, left_near, entered_trap,
+                                   captured),
                            rtol=1e-7, atol=1e-9, max_step=max_step)
 
-    s_end = sol.y[0, -1] * x0 * 1e3
-    v_end = sol.y[1, -1] * v0
     t_ev = [np.asarray(e) for e in sol.t_events]
     escaped = (t_ev[0].size > 0) or (t_ev[1].size > 0)
-    caught = ((not escaped) and abs(s_end) < CAPTURE_RADIUS_MM
-              and abs(v_end) < CAPTURE_SPEED_MS)
+    caught = (not escaped) and t_ev[3].size > 0
 
-    if t_ev[2].size > 0:
-        t_stop = (sol.t[-1] - t_ev[2].ravel()[0]) * t0
+    if caught and t_ev[2].size > 0:
+        t_stop = (t_ev[3].ravel()[0] - t_ev[2].ravel()[0]) * t0
     else:
         t_stop = 0.0
     return caught, max(t_stop, 0.0)
@@ -1122,6 +1131,15 @@ def build_capture_map(run, norm, offs_mm, s_mm, v_ms, a_grid, verbose=True):
             run.say(f"  WARNING: peak v_c = {vc.max():.1f} m/s against a grid "
                     f"edge of {v_max_ms:.1f} m/s (only {headroom:.2f}x "
                     "headroom). Raise FT_V_MAX_MS.")
+
+        live = t_stop[t_stop > 0]
+        ceiling_ms = TRAJ_T_MAX_BAR * norm["t0"] * 1e3
+        if live.size and np.median(live) * 1e3 > 0.5 * ceiling_ms:
+            run.say(f"  WARNING: median stopping time "
+                    f"{np.median(live) * 1e3:.0f} ms against an integration "
+                    f"ceiling of {ceiling_ms:.0f} ms. The marginal atom is "
+                    "not stopping, so t_stop is the clock and the transverse "
+                    "drift test will swamp the capture velocity.")
     return vc, t_stop
 
 
@@ -1626,7 +1644,7 @@ def fig_phase_portrait(norm, offs_mm, s_mm, v_ms, a_grid):
                         max_step=TRAJ_T_MAX_BAR / 200, dense_output=True)
         ts = np.linspace(0, sol.t[-1], 900)
         yy = sol.sol(ts)
-        caught = (abs(yy[0, -1] * x0 * 1e3) < CAPTURE_RADIUS_MM
+        caught = (abs(yy[0, -1] * x0 * 1e3) < CAPTURE_AXIAL_MM
                   and abs(yy[1, -1] * v0) < CAPTURE_SPEED_MS)
         ax.plot(yy[0] * x0 * 1e3, yy[1] * v0,
                 color="k" if caught else "0.45",
