@@ -46,7 +46,7 @@ def mot_config(name, grad_G_cm, detuning_gamma, P_h_mW, P_v_mW, waist_m=0.022):
 
 def s_delta(cfg):
     """Paper's total saturation parameter at the detuning."""
-    i_tot = 2 * (4 * cfg["P_h_mW"] + 2 * cfg["P_v_mW"]) * 1e-3 / (
+    i_tot = (4 * cfg["P_h_mW"] + 2 * cfg["P_v_mW"]) * 1e-3 / (
         math.pi * cfg["waist_m"] ** 2) / ISAT_PAPER_W_M2
     return i_tot / (1 + 4 * (cfg["detuning_hz"] / GAMMA_PAPER_HZ) ** 2)
 
