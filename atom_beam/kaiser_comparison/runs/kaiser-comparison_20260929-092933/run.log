@@ -1,0 +1,39 @@
+========================================================================
+kaiser-comparison  ->  /home/claude/repo/atom_beam/kaiser_comparison/runs/kaiser-comparison_20260929-092933
+Letellier et al. 2023 MOT, slowing beam off
+========================================================================
+[    1.4s] nozzle: 1,460,866 transmitted of 60,000,000, 25,726 through apertures, 25,706 in the trap window
+[    1.9s]   [figure] beam_and_laser_geometry.png
+[    2.6s]   [figure] atom_beam_at_trap.png
+[    2.8s]   [figure] nozzle_face.png
+[    6.4s]   [figure] beam_checks.png
+[    7.3s] fig8_s6.93: s_delta=0.0074, v_c centre 19.8 m/s, L(395 C) = 2.881e+07/s
+[    8.1s] fig8_s8.87: s_delta=0.0095, v_c centre 26.3 m/s, L(395 C) = 6.424e+07/s
+[    9.1s] fig8_s10.35: s_delta=0.0111, v_c centre 31.8 m/s, L(395 C) = 1.050e+08/s
+[   10.2s] fig8_s11.28: s_delta=0.0121, v_c centre 34.9 m/s, L(395 C) = 1.356e+08/s
+[   11.0s] fig8_s11.87: s_delta=0.0128, v_c centre 36.7 m/s, L(395 C) = 1.555e+08/s
+[   11.8s] fig6_100mW: s_delta=0.0129, v_c centre 37.0 m/s, L(387 C) = 1.190e+08/s
+[   13.2s] fig10_s0.09: s_delta=0.0731, v_c centre 39.9 m/s, L(413 C) = 8.261e+08/s
+[   14.0s] fig10_s0.15: s_delta=0.1218, v_c centre 44.4 m/s, L(413 C) = 1.219e+09/s
+[   14.8s] fig10_s0.20: s_delta=0.1624, v_c centre 46.9 m/s, L(413 C) = 1.446e+09/s
+[   15.6s] fig10_s0.29: s_delta=0.2355, v_c centre 50.1 m/s, L(413 C) = 1.742e+09/s
+[   16.7s] fig10_s0.35: s_delta=0.2843, v_c centre 51.8 m/s, L(413 C) = 1.873e+09/s
+[   17.3s] fig10_s0.39: s_delta=0.3167, v_c centre 52.8 m/s, L(413 C) = 1.990e+09/s
+[   18.0s]   [figure] mot_fig6_fig8.png
+[   18.5s]   [figure] mot_fig10.png
+[   18.9s]   [figure] mot_fig6_fig8_gain.png
+[   19.1s]   [figure] mot_fig10_gain.png
+[   19.6s]   [figure] capture_velocity_maps.png
+[   20.4s]   [figure] phase_portrait_fig6_config.png
+[   20.4s]   [file] kaiser_vs_sim.csv (0.0 MB)  comparison table
+
+------------------------------------------------------------------------
+SUMMARY
+  clausing_W          0.0243478
+  fig10_L_sim         [826101551.4176568, 1218669785.6685517, 1445606857.1233819, 1741620958.9174366, 1873473208.6576834, 1990306430.1349103]
+  fig10_T_inferred_C  413.145
+  fig6_L_sim_387C     1.19025e+08
+  fig8_L_sim          [28812686.95824197, 64236971.517618984, 105027947.3941731, 135561581.97096834, 155536874.37741968]
+------------------------------------------------------------------------
+11 files written to /home/claude/repo/atom_beam/kaiser_comparison/runs/kaiser-comparison_20260929-092933
+finished in 0.3 min
