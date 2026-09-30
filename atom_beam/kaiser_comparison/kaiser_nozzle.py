@@ -64,7 +64,7 @@ def _trace_chunk(args):
                 n=n)
 
 
-def trace(n_launch=20_000_000, chunk=250_000, seed=20231220, workers=None):
+def trace(n_launch=200_000_000, chunk=250_000, seed=20231220, workers=None):
     """Transmitted atoms leaving the nozzle face, cached."""
     if os.path.exists(CACHE):
         z = np.load(CACHE)
