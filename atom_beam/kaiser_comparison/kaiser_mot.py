@@ -3,6 +3,8 @@
 import os
 import sys
 
+
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(HERE))
 
@@ -11,7 +13,7 @@ for _k, _v in dict(FT_BEAM_TILT_DEG=45.0, FT_FLIGHT_MM=520.0,
                    FT_WAIST_M=0.022, FT_SLOWER=0, FT_NOZZLE_OFFSET_C=0.0,
                    FT_S_NEAR_MM=66.0, FT_S_PAST_MM=66.0, FT_S_NEAR_STEP_MM=1.5,
                    FT_S_FAR_STEP_MM=15.0, FT_V_RES_MS=2.5,
-                   FT_RESERVED_CPUS=0,
+                   FT_RESERVED_CPUS=2,
                    RUNLOG_ROOT=os.path.join(HERE, "runs")).items():
     os.environ.setdefault(_k, str(_v))
 
@@ -46,9 +48,9 @@ def mot_config(name, grad_G_cm, detuning_gamma, P_h_mW, P_v_mW, waist_m=0.022):
 
 def s_delta(cfg):
     """Paper's total saturation parameter at the detuning."""
-    i_tot = (4 * cfg["P_h_mW"] + 2 * cfg["P_v_mW"]) * 1e-3 / (
+    i_tot = 2.0 * (4 * cfg["P_h_mW"] + 2 * cfg["P_v_mW"]) * 1e-3 / (
         math.pi * cfg["waist_m"] ** 2) / ISAT_PAPER_W_M2
-    return i_tot / (1 + 4 * (cfg["detuning_hz"] / GAMMA_PAPER_HZ) ** 2) # Used to be * 2
+    return i_tot / (1 + 4 * (cfg["detuning_hz"] / GAMMA_PAPER_HZ) ** 2)
 
 
 def quadrupole(grad_G_cm):

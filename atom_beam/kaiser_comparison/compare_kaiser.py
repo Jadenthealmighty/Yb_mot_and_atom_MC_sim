@@ -19,6 +19,7 @@ import runlog
 
 PAPER_DIR = os.path.join(km.HERE, "paper")
 BLUE, ORANGE, GREEN, GREY = "#1f77b4", "#ff7f0e", "#2ca02c", "0.4"
+OVEN_TEMP_OFFSET_C = 50.0
 
 
 def paper_rows(figure, series):
@@ -198,6 +199,7 @@ def calib(T_c, beam):
 
 
 def run_mot(run, norm, data, cfg, T_c):
+    T_c = T_c - OVEN_TEMP_OFFSET_C
     offs, s_mm, v_ms, a, vc, ts = km.capture_map(run, norm, cfg)
     L = km.load_rate(data, offs, vc, ts, T_c, kn.flux_into_tubes(T_c),
                      kn.YB174_ABUNDANCE)
