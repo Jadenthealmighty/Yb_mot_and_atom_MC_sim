@@ -53,8 +53,8 @@ def _get_unit_collection():
         for loop_height in HEIGHT_POSITIONS_MM:
             height = loop_height * 1e-3 * _LENGTH_PER_M
             top_coils.add(magpy.current.Circle(
-                current=REFERENCE_CURRENT_A, diameter=diameter,
-                position=(0, 0, height)))
+                current=REFERENCE_CURRENT_A * 15/16, diameter=diameter,
+                position=(0, 0, height))) # CHANGE BACK :LATE PLEASE!!!
             bottom_coils.add(magpy.current.Circle(
                 current=-REFERENCE_CURRENT_A, diameter=diameter,
                 position=(0, 0, -height)))
