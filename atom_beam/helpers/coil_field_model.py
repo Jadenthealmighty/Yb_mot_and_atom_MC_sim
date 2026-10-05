@@ -3,6 +3,8 @@ helpers that turn any B(metres) into something pylcp
 can use.
 """
 
+import os
+
 import numpy as np
 import magpylib as magpy
 import scipy.constants as sp_const
@@ -25,11 +27,17 @@ TOTAL_TURNS = TOTAL_COILS * TURNS_PER_COIL
 
 N_RADIAL = N_TOP_COILS * LAYERS_PER_COIL
 
+TURNS_PER_SIDE = N_TOP_COILS * TURNS_PER_COIL
+N_TURNS_TOP = 0.9 * TURNS_PER_SIDE#float(os.environ.get("FT_COIL_TURNS_TOP", TURNS_PER_SIDE))
+N_TURNS_BOTTOM = float(os.environ.get("FT_COIL_TURNS_BOTTOM", TURNS_PER_SIDE))
+
 
 RADIUS_POSITIONS_MM = INNER_RADIUS_MM + WIRE_SIDE_MM / 2 + np.arange(N_RADIAL) * WIRE_SIDE_MM
 HEIGHT_POSITIONS_MM = GAP_BETWEEN_COILS_MM / 2 + WIRE_SIDE_MM / 2 + np.arange(TURNS_PER_LAYER) * WIRE_SIDE_MM
 
 REFERENCE_CURRENT_A = 1.0
+REF_CURRENT_TOP_A = float(os.environ.get("FT_COIL_REF_A_TOP", REFERENCE_CURRENT_A))
+REF_CURRENT_BOTTOM_A = 0.9 #float(os.environ.get("FT_COIL_REF_A_BOTTOM", REFERENCE_CURRENT_A))
 
 
 
@@ -40,27 +48,41 @@ _TESLA_PER_UNIT = 1.0 if _MAGPY_MAJOR >= 5 else 1e-3
 _cached_collection = None
 
 
+def stack_rows(n_turns):
+    n_rows = int(np.ceil(n_turns / N_RADIAL - 1e-9))
+    heights = GAP_BETWEEN_COILS_MM / 2 + WIRE_SIDE_MM / 2 + np.arange(n_rows) * WIRE_SIDE_MM
+    fill = np.clip(n_turns / N_RADIAL - np.arange(n_rows), 0.0, 1.0)
+    return heights, fill
+
+
 def _get_unit_collection():
-    """The 128-loop anti-Helmholtz Collection at 1 A per turn, built once."""
+    """Anti-Helmholtz Collection at 1 A per turn, built once."""
     global _cached_collection
     if _cached_collection is not None:
         return _cached_collection
 
-    top_coils = magpy.Collection()
-    bottom_coils = magpy.Collection()
-    for loop_radius in RADIUS_POSITIONS_MM:
-        diameter = 2 * loop_radius * 1e-3 * _LENGTH_PER_M
-        for loop_height in HEIGHT_POSITIONS_MM:
-            height = loop_height * 1e-3 * _LENGTH_PER_M
-            top_coils.add(magpy.current.Circle(
-                current=REFERENCE_CURRENT_A * 15/16, diameter=diameter,
-                position=(0, 0, height))) # CHANGE BACK :LATE PLEASE!!!
-            bottom_coils.add(magpy.current.Circle(
-                current=-REFERENCE_CURRENT_A, diameter=diameter,
-                position=(0, 0, -height)))
+    coils = magpy.Collection()
+    for sign, n_turns, ref_a in ((+1, N_TURNS_TOP, REF_CURRENT_TOP_A),
+                                 (-1, N_TURNS_BOTTOM, REF_CURRENT_BOTTOM_A)):
+        for loop_height, fill in zip(*stack_rows(n_turns)):
+            height = sign * loop_height * 1e-3 * _LENGTH_PER_M
+            for loop_radius in RADIUS_POSITIONS_MM:
+                diameter = 2 * loop_radius * 1e-3 * _LENGTH_PER_M
+                coils.add(magpy.current.Circle(
+                    current=sign * fill * ref_a,
+                    diameter=diameter, position=(0, 0, height)))
 
-    _cached_collection = magpy.Collection(top_coils, bottom_coils)
+    _cached_collection = coils
     return _cached_collection
+
+
+def field_zero_z_mm(search_mm=40.0):
+    """Height of the B = 0 point on the coil axis (0 for matched stacks)."""
+    z_mm = np.linspace(-search_mm, search_mm, 801)
+    xyz_m = np.column_stack([np.zeros_like(z_mm), np.zeros_like(z_mm), z_mm * 1e-3])
+    B_z = oswald_coil_bfield(xyz_m, REFERENCE_CURRENT_A)[:, 2]
+    i = int(np.argmax(np.diff(np.sign(B_z)) != 0))
+    return float(np.interp(0.0, B_z[i:i + 2], z_mm[i:i + 2]))
 
 
 def oswald_coil_bfield(xyz_meters, current_A):
@@ -192,5 +214,7 @@ if __name__ == '__main__':
           f"(expected {ratio_expected:.6f}) "
           f"{'OK' if abs(ratio_actual - ratio_expected) < 1e-9 else 'MISMATCH , investigate!'}")
 
-    print(f"\n  {TOTAL_COILS} coils x {TURNS_PER_COIL} turns/coil = {TOTAL_TURNS} total loops "
-          "in the cached Collection.")
+    print(f"\n  turns: top {N_TURNS_TOP:g}, bottom {N_TURNS_BOTTOM:g} "
+          f"(nominal {TURNS_PER_SIDE} each); current per {REFERENCE_CURRENT_A:g} A: "
+          f"top {REF_CURRENT_TOP_A:g}, bottom {REF_CURRENT_BOTTOM_A:g}; field zero at z = "
+          f"{field_zero_z_mm():+.2f} mm")

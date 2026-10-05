@@ -2055,6 +2055,7 @@ def main():
     power_w = BEAM_AVG_SAT * isat * math.pi * BEAM_WAIST_M ** 2
     t_free_mol_c = free_molecular_limit_C(n3.L)
 
+    import helpers.coil_field_model as cfm
     params = {
         "T_min_C": T_MIN_C, "T_max_C": T_MAX_C, "T_step_C": T_STEP_C,
         "nozzle_wall_offset_C": NOZZLE_OFFSET_C,
@@ -2070,6 +2071,11 @@ def main():
         "detuning_Hz": DETUNING_HZ,
         "detuning_over_Gamma": DETUNING_HZ / sim.YB174_LINEWIDTH_HZ,
         "coil_current_A": OPT_CURRENT_A,
+        "coil_turns_top": cfm.N_TURNS_TOP,
+        "coil_turns_bottom": cfm.N_TURNS_BOTTOM,
+        "coil_ref_current_top_A": cfm.REF_CURRENT_TOP_A,
+        "coil_ref_current_bottom_A": cfm.REF_CURRENT_BOTTOM_A,
+        "coil_field_zero_z_mm": cfm.field_zero_z_mm(),
         "nozzle_atoms": NOZZLE_ATOMS,
         "n_channels": n3.N_CHAN_Y * n3.N_CHAN_Z,
         "channel_length_mm": n3.CHANNEL_LENGTH_MM,
