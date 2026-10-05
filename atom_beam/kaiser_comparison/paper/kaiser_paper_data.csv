@@ -1,0 +1,75 @@
+figure,series,x,y,y_err,x_unit,y_unit,slower,conditions
+fig8,L_mot_only,6.93e-3,1.35e6,,s_delta,atoms/s,off,T=395C; Delta=-2Gamma; gradB=32G/cm
+fig8,L_mot_only,8.87e-3,3.95e6,,s_delta,atoms/s,off,T=395C; Delta=-2Gamma; gradB=32G/cm
+fig8,L_mot_only,10.35e-3,1.23e7,,s_delta,atoms/s,off,T=395C; Delta=-2Gamma; gradB=32G/cm
+fig8,L_mot_only,11.28e-3,1.81e7,,s_delta,atoms/s,off,T=395C; Delta=-2Gamma; gradB=32G/cm
+fig8,L_mot_only,11.87e-3,2.52e7,,s_delta,atoms/s,off,T=395C; Delta=-2Gamma; gradB=32G/cm
+fig8,N_mot_only,6.93e-3,2.79e6,,s_delta,atoms,off,T=395C; Delta=-2Gamma; gradB=32G/cm
+fig8,N_mot_only,8.87e-3,9.5e6,,s_delta,atoms,off,T=395C; Delta=-2Gamma; gradB=32G/cm
+fig8,N_mot_only,10.35e-3,2.10e7,,s_delta,atoms,off,T=395C; Delta=-2Gamma; gradB=32G/cm
+fig8,N_mot_only,11.28e-3,3.06e7,,s_delta,atoms,off,T=395C; Delta=-2Gamma; gradB=32G/cm
+fig8,N_mot_only,11.87e-3,3.70e7,,s_delta,atoms,off,T=395C; Delta=-2Gamma; gradB=32G/cm
+fig6,N_pmo_on,302,0.9e7,0.2e7,C,atoms,off,s_delta=0.012; 19mW/horiz 12mW/vert; Delta=-2Gamma; gradB=32G/cm; read from inset
+fig6,N_pmo_on,387,2.6e7,0.3e7,C,atoms,off,s_delta=0.012; 19mW/horiz 12mW/vert; Delta=-2Gamma; gradB=32G/cm
+fig6,N_pmo_on,455,1.0e7,0.3e7,C,atoms,off,s_delta=0.012; 19mW/horiz 12mW/vert; Delta=-2Gamma; gradB=32G/cm
+fig10,N_inf,0.09,2.15e6,,s_delta,atoms,off,gradB=3.1G/cm; Delta=-1.4Gamma; Pmax=587mW=2.8Isat; T not given
+fig10,N_inf,0.15,3.75e6,,s_delta,atoms,off,gradB=3.1G/cm; Delta=-1.4Gamma; Pmax=587mW=2.8Isat; T not given
+fig10,N_inf,0.20,5.05e6,,s_delta,atoms,off,gradB=3.1G/cm; Delta=-1.4Gamma; Pmax=587mW=2.8Isat; T not given
+fig10,N_inf,0.29,6.85e6,,s_delta,atoms,off,gradB=3.1G/cm; Delta=-1.4Gamma; Pmax=587mW=2.8Isat; T not given
+fig10,N_inf,0.35,7.8e6,,s_delta,atoms,off,gradB=3.1G/cm; Delta=-1.4Gamma; Pmax=587mW=2.8Isat; T not given
+fig10,N_inf,0.39,7.95e6,,s_delta,atoms,off,gradB=3.1G/cm; Delta=-1.4Gamma; Pmax=587mW=2.8Isat; T not given
+fig10,alpha,0.093,1.635,0.17,s_delta,1/s,off,gradB=3.1G/cm; Delta=-1.4Gamma
+fig10,alpha,0.147,1.529,0.07,s_delta,1/s,off,gradB=3.1G/cm; Delta=-1.4Gamma
+fig10,alpha,0.200,1.650,0.03,s_delta,1/s,off,gradB=3.1G/cm; Delta=-1.4Gamma
+fig10,alpha,0.294,1.949,0.02,s_delta,1/s,off,gradB=3.1G/cm; Delta=-1.4Gamma
+fig10,alpha,0.355,2.291,0.02,s_delta,1/s,off,gradB=3.1G/cm; Delta=-1.4Gamma
+fig10,alpha,0.390,2.523,0.01,s_delta,1/s,off,gradB=3.1G/cm; Delta=-1.4Gamma
+fig12,alpha,342.1,0.1935,,C,1/s,off,late-time single-atom decay; PMOT=100mW
+fig12,alpha,355.1,0.258,,C,1/s,off,late-time single-atom decay; PMOT=100mW
+fig12,alpha,365.1,0.297,,C,1/s,off,late-time single-atom decay; PMOT=100mW
+fig12,alpha,377.1,0.436,,C,1/s,off,late-time single-atom decay; PMOT=100mW
+fig12,alpha,387.1,0.500,,C,1/s,off,late-time single-atom decay; PMOT=100mW
+fig12,alpha,397.1,0.612,,C,1/s,off,late-time single-atom decay; PMOT=100mW
+fig12,alpha,407.1,0.824,,C,1/s,off,late-time single-atom decay; PMOT=100mW
+fig12,alpha,415.1,1.06,,C,1/s,off,late-time single-atom decay; PMOT=100mW
+fig12,alpha,430.1,1.574,,C,1/s,off,late-time single-atom decay; PMOT=100mW
+fig12,alpha,437.1,1.85,,C,1/s,off,late-time single-atom decay; PMOT=100mW
+fig12,alpha,445.2,2.27,,C,1/s,off,late-time single-atom decay; PMOT=100mW
+fig12,alpha,450.1,2.56,,C,1/s,off,late-time single-atom decay; PMOT=100mW
+fig12,alpha,456.1,2.91,,C,1/s,off,late-time single-atom decay; PMOT=100mW
+fig5b,peak_abs_174_cell,317,0.167,,C,percent,n/a,399nm probe at cell centre
+fig5b,peak_abs_174_cell,332,0.255,,C,percent,n/a,399nm probe at cell centre
+fig5b,peak_abs_174_cell,345,0.386,,C,percent,n/a,399nm probe at cell centre
+fig5b,peak_abs_174_cell,355,0.508,,C,percent,n/a,399nm probe at cell centre
+fig5b,peak_abs_174_cell,367,0.830,,C,percent,n/a,399nm probe at cell centre
+fig5b,peak_abs_174_cell,383,1.229,,C,percent,n/a,399nm probe at cell centre
+fig5b,peak_abs_174_cell,390,1.438,,C,percent,n/a,399nm probe at cell centre
+fig5b,peak_abs_174_cell,400,1.856,,C,percent,n/a,399nm probe at cell centre
+fig5b,peak_abs_174_cell,414,3.093,,C,percent,n/a,399nm probe at cell centre
+fig5b,peak_abs_174_cell,428,4.277,,C,percent,n/a,399nm probe at cell centre
+fig5b,peak_abs_174_cell,438,5.521,,C,percent,n/a,399nm probe at cell centre
+fig5b,peak_abs_174_cell,448,6.588,,C,percent,n/a,399nm probe at cell centre
+fig5b,peak_abs_174_cell,470,8.018,,C,percent,n/a,399nm probe at cell centre; opaque regime
+fig5b,peak_abs_174_cell,480,8.845,,C,percent,n/a,399nm probe at cell centre; opaque regime
+fig5b,peak_abs_174_cell,490,9.854,,C,percent,n/a,399nm probe at cell centre; opaque regime
+fig5b,peak_abs_174_cell,500,11.306,,C,percent,n/a,399nm probe at cell centre; opaque regime
+fig5b,peak_abs_174_cell,507,11.992,,C,percent,n/a,399nm probe at cell centre; opaque regime
+fig5b,peak_abs_174_cell,517,12.845,,C,percent,n/a,399nm probe at cell centre; opaque regime
+fig4b,theta_half,375.0,24.9,,C,mrad,n/a,HWHM of angular distribution 11cm after nozzle
+fig4b,theta_half,392.5,26.6,,C,mrad,n/a,HWHM of angular distribution 11cm after nozzle
+fig4b,theta_half,402.5,26.6,,C,mrad,n/a,HWHM of angular distribution 11cm after nozzle
+fig4b,theta_half,410.0,27.9,,C,mrad,n/a,HWHM of angular distribution 11cm after nozzle
+fig4b,theta_half,417.5,32.7,,C,mrad,n/a,HWHM of angular distribution 11cm after nozzle
+fig4b,theta_half,424.9,39.3,,C,mrad,n/a,HWHM of angular distribution 11cm after nozzle
+fig4b,theta_half,434.9,51.0,,C,mrad,n/a,HWHM of angular distribution 11cm after nozzle
+fig4b,theta_half,452.4,53.2,,C,mrad,n/a,HWHM of angular distribution 11cm after nozzle
+fig4b,theta_half,477.3,64.2,,C,mrad,n/a,HWHM of angular distribution 11cm after nozzle
+fig4b,theta_half,504.8,70.7,,C,mrad,n/a,HWHM of angular distribution 11cm after nozzle
+text,clausing_factor,,0.026,,,fraction,n/a,t_Cl = 4 d_i / 3 l_c
+text,flux_per_tube_400C,400,1e12,,C,atoms/s,n/a,all isotopes
+text,total_flux_400C,400,7e14,,C,atoms/s,n/a,~700 tubes; all isotopes
+text,theta_half_geometric,,16,,,mrad,n/a,1.68 d_i / 2 l_c
+text,vperp_rms_cell,,6.0,,,m/s,n/a,Voigt Gaussian rms k v = 2pi x 15 MHz
+text,A1_cell_absorption_slope,,5461,91,,K,n/a,log10(abs) = -A1/T + B1 below 450C
+text,A2_alpha_slope,,5371,77,,K,n/a,log10(alpha) = -A2/T + B2
+text,alpha_optical_pumping,,0.037,,,1/s,n/a,added to Fig 12 fit

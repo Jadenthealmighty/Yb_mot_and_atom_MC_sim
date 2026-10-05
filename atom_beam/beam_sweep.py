@@ -34,7 +34,7 @@ def _floats(name, default):
 
 
 SLOWER_AVG_SATS = _floats("SW_SLOWER_AVG_SATS", "0.1,0.2,0.3,0.4,0.5")
-RADII_MM = _floats("SW_RADII_MM", "5,7.5,10,12.5,15")
+RADII_MM = _floats("SW_RADII_MM", "5,6,7,8,9,10,11,12,13,15")
 MOT_RADII_MM = _floats("SW_MOT_RADII_MM", "")
 SLOWER_POL = int(os.environ.get("SW_SLOWER_POL", "-1"))
 TABLE_CSV = os.path.join(HERE, os.environ.get("SW_TABLE",
