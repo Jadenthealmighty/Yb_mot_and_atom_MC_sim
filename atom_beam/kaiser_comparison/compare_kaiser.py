@@ -343,7 +343,7 @@ def mot_checks(run, norm, data, tab, beam):
     # a.semilogy(temps, at0(N6s), "-", color=ORANGE, lw=2, label="sim L / alpha_paper")
     a.plot(temps, at0(N6s * cal), "--", color=ORANGE, lw=1.5,
                label="Simulate N_st (trapped atoms)")
-    a.plot(T6, N6 / N6[0], e6 / N6[0], fmt="^", color=ORANGE, ms=9,
+    a.plot(T6, N6 / N6[0], e6 / N6[0], marker="^", color=ORANGE, ms=9,
                label="paper N_st")
     # a.semilogy(temps, at0(L6), "-", color=BLUE, lw=2, label="sim L")
     a.plot(temps, at0(L6 * cal), "--", color=BLUE, lw=1.5,
