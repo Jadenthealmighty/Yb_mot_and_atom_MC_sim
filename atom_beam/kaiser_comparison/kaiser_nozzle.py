@@ -29,7 +29,7 @@ GAMMA_BLUE_HZ = 29e6
 GAMMA_GREEN_HZ = 182e3
 PROBE_HEIGHT_M = 2e-3
 
-T_OFFSET = 50
+T_OFFSET = 0
 
 CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache",
                      "kaiser_nozzle_trace.npz")

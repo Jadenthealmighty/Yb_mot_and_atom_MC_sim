@@ -280,8 +280,8 @@ def mot_checks(run, norm, data, tab, beam):
     a = ax[0]
     a.semilogy(sP * 1e3, LP, "^", color=BLUE, ms=9, label="paper L (MOT only)")
     a.semilogy(sP * 1e3, L8, "o-", color=BLUE, mfc="none", label="sim L")
-    a.semilogy(sP * 1e3, L8 * c8, "s--", color=BLUE, mfc="none", alpha=0.6,
-               label="sim L, flux calibrated")
+    # a.semilogy(sP * 1e3, L8 * c8, "s--", color=BLUE, mfc="none", alpha=0.6,
+    #            label="sim L, flux calibrated")
     a.semilogy(sP * 1e3, NP, "^", color=ORANGE, ms=9, label="paper N_st")
     a.semilogy(sP * 1e3, L8 / alpha_paper(T8, sP), "o-", color=ORANGE,
                mfc="none", label="sim L / alpha_paper")
@@ -293,8 +293,8 @@ def mot_checks(run, norm, data, tab, beam):
     a.semilogy(temps, L6 / alpha_paper(temps, 0.012), "-", color=ORANGE, lw=2,
                label="sim L / alpha_paper")
     cal = np.array([calib(T, beam) for T in temps])
-    a.semilogy(temps, L6 * cal / alpha_paper(temps, 0.012), "--", color=ORANGE,
-               lw=1.5, label="same, flux calibrated")
+    # a.semilogy(temps, L6 * cal / alpha_paper(temps, 0.012), "--", color=ORANGE,
+    #            lw=1.5, label="sim, flux calibrated")
     a.errorbar(T6, N6, e6, fmt="^", color=ORANGE, ms=9, label="paper N_st (Fig. 6)")
     a.semilogy(temps, L6, "-", color=BLUE, lw=2, label="sim L")
     a.semilogy(T6, N6 * alpha_paper(T6, 0.012), "^", color=BLUE, ms=9,
