@@ -340,16 +340,16 @@ def mot_checks(run, norm, data, tab, beam):
     a.legend(fontsize=8)
     a = ax[1]
     N6s = L6 / alpha_paper(temps, 0.012)
-    a.semilogy(temps, at0(N6s), "-", color=ORANGE, lw=2, label="sim L / alpha_paper")
-    a.semilogy(temps, at0(N6s * cal), "--", color=ORANGE, lw=1.5,
-               label="same, flux calibrated")
-    a.errorbar(T6, N6 / N6[0], e6 / N6[0], fmt="^", color=ORANGE, ms=9,
+    # a.semilogy(temps, at0(N6s), "-", color=ORANGE, lw=2, label="sim L / alpha_paper")
+    a.plot(temps, at0(N6s * cal), "--", color=ORANGE, lw=1.5,
+               label="Simulate N_st (trapped atoms)")
+    a.plot(T6, N6 / N6[0], e6 / N6[0], fmt="^", color=ORANGE, ms=9,
                label="paper N_st")
-    a.semilogy(temps, at0(L6), "-", color=BLUE, lw=2, label="sim L")
-    a.semilogy(temps, at0(L6 * cal), "--", color=BLUE, lw=1.5,
-               label="sim L, flux calibrated")
+    # a.semilogy(temps, at0(L6), "-", color=BLUE, lw=2, label="sim L")
+    a.plot(temps, at0(L6 * cal), "--", color=BLUE, lw=1.5,
+               label="simulated load rate")
     LP6 = N6 * alpha_paper(T6, 0.012)
-    a.semilogy(T6, LP6 / LP6[0], "^", color=BLUE, ms=9, label="paper alpha N_st")
+    a.plot(T6, LP6 / LP6[0], "^", color=BLUE, ms=9, label="paper alpha N_st")
     a.axhline(1, color=GREY, lw=0.8)
     a.set_xlabel("oven temperature [C]")
     a.set_ylabel(f"gain over {T0:.0f} C")
