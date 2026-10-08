@@ -150,6 +150,11 @@ CAPTURE_AXIAL_MM = _envf("FT_CAPTURE_AXIAL_MM", BEAM_WAIST_M * 1000)
 CAPTURE_DRIFT_MM = _envf("FT_CAPTURE_DRIFT_MM", BEAM_WAIST_M * 1000)
 CAPTURE_SPEED_MS = _envf("FT_CAPTURE_SPEED_MS", 3.0)
 
+# Caught only if it has not escaped this long after first reaching the capture box
+CAPTURE_DWELL_MS = _envf("FT_CAPTURE_DWELL_MS", 20.0)
+# t_stop for the drift test is taken from an atom launched at this fraction of v_c
+STOP_FRAC = _envf("FT_STOP_FRAC", 0.9)
+
 N_V_SCAN = _envi("FT_N_V_SCAN", 24)
 N_V_BISECT = _envi("FT_N_V_BISECT", 12)
 
@@ -975,9 +980,8 @@ def capture_velocity(a_tab, norm, v_try_ms, s_mm, v_max_ms):
     """Launch one atom AT THE NOZZLE FACE at v_try_ms, integrate the whole
     flight, and report whether it is caught.
 
-    Equation of motion in pylcp's normalized units. Capture is a terminal
-    event, so t_stop is the time the atom takes to stop after entering the
-    trap region rather than whatever is left of TRAJ_T_MAX_BAR."""
+    Caught = reaches the capture box and has not escaped CAPTURE_DWELL_MS
+    later. TRAJ_T_MAX_BAR counts from arrival, so slow launches get tested."""
     x0, v0, t0 = norm["x0"], norm["v0"], norm["t0"]
     s_lo_bar = s_mm[0] * 1e-3 / x0
     s_hi_bar = s_mm[-1] * 1e-3 / x0
@@ -1013,9 +1017,10 @@ def capture_velocity(a_tab, norm, v_try_ms, s_mm, v_max_ms):
 
     max_step = min(TRAJ_T_MAX_BAR / 200.0,
                    (2e-3 / x0) / max(v_max_ms / v0, 1e-9))
+    t_flight = -s0_bar / max(v_try_ms / v0, 1e-9)
 
     # See: https://github.com/jrenaud90/CyRK
-    sol = CyRK.pysolve_ivp(rhs, (0.0, TRAJ_T_MAX_BAR),
+    sol = CyRK.pysolve_ivp(rhs, (0.0, t_flight + TRAJ_T_MAX_BAR),
                            np.array([s0_bar, v_try_ms / v0]),
                            method=IVP_METHOD,
                            events=(left_far, left_near, entered_trap,
@@ -1026,6 +1031,14 @@ def capture_velocity(a_tab, norm, v_try_ms, s_mm, v_max_ms):
     escaped = (t_ev[0].size > 0) or (t_ev[1].size > 0)
     caught = (not escaped) and t_ev[3].size > 0
 
+    if caught:
+        t_in = float(np.asarray(sol.t)[-1])
+        dwell = CyRK.pysolve_ivp(rhs, (t_in, t_in + CAPTURE_DWELL_MS * 1e-3 / t0),
+                                 np.asarray(sol.y)[:, -1].copy(),
+                                 method=IVP_METHOD, events=(left_far, left_near),
+                                 rtol=1e-7, atol=1e-9, max_step=max_step)
+        caught = all(np.asarray(e).size == 0 for e in dwell.t_events)
+
     if caught and t_ev[2].size > 0:
         t_stop = (t_ev[3].ravel()[0] - t_ev[2].ravel()[0]) * t0
     else:
@@ -1035,7 +1048,7 @@ def capture_velocity(a_tab, norm, v_try_ms, s_mm, v_max_ms):
 
 def _capture_cell(norm, s_bar, v_bar, a_cell, s_mm, v_max_ms):
     """Largest catchable launch speed at one transverse offset, and the time
-    the marginal atom spends decelerating."""
+    an atom at STOP_FRAC of it spends decelerating (the marginal one crawls)."""
     interp = (s_bar, v_bar, a_cell)
     ladder = np.linspace(v_max_ms / N_V_SCAN, v_max_ms * 0.95, N_V_SCAN)
 
@@ -1059,6 +1072,12 @@ def _capture_cell(norm, s_bar, v_bar, a_cell, s_mm, v_max_ms):
             else:
                 hi = mid
         best, best_t = lo, lo_t
+
+    if best > 0 and STOP_FRAC < 1:
+        caught, ts = capture_velocity(interp, norm, STOP_FRAC * best, s_mm,
+                                      v_max_ms)
+        if caught:
+            best_t = ts
 
     return best, best_t
 
@@ -1756,7 +1775,7 @@ def fig_rate_vs_temperature(temps_c, rows, t_free_mol_c):
     ax.set_xlabel(r"oven temperature [$^\circ$C]")
     ax.set_ylabel("steady-state trapped number $N = R\\tau$")
     ax.set_title("Steady-state number\n"
-                 "pick the curve matching your vacuum-limited lifetime")
+                 "(assuming no-loss)")
     ax.legend(fontsize=9)
 
     for a in axes:

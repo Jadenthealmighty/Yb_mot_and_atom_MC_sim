@@ -13,6 +13,18 @@ atom beam, nozzle trace and CyRK capture map are all reused from the MOT code.
 Outputs go to `oot/runs/yb-oot-trap-sweep_<stamp>/`. A default run takes a few
 minutes: the force grid is a vectorised rate-equation solve, not pylcp.
 
+Besides the `full_trap_sweep` figures, a run writes
+```
+oot_geometry                    beams and atom beam, top and side views
+effective_field                 |B_eff| maps and line cuts (paper Fig. 1e)
+force_cuts_through_centre       restoring force and damping, OOT vs coil MOT
+phase_portrait_along_atom_beam  paper Fig. 2 along the atom beam
+capture_map_diagnosis           cooling light per ray, rest point, stopping time
+shift_beam_design_scan          v_c, trap frequency, depth vs shift power/waist/detuning
+*_beam_paths                    copies of the cross-section maps with the MOT
+                                and shift beam axes drawn on
+```
+
 ## Files
 ```
 oot_trap_sweep.py    the pipeline: shift + cooling beams, force grid, capture map,
@@ -51,5 +63,6 @@ read from `atom_beam/nozzle_trace_cache.npz` with its own atom count unless
 | `OOT_RETRO` | 1 | retro-reflected quad beams |
 | `OOT_DOPPLER` | 1 | Doppler shift on the shift beams |
 | `OOT_AUTO_SIGN` | 1 | flip the detuning sign if it anti-traps |
-| `OOT_COMPARE_MOT` | 1 | also run the coil MOT in the same geometry |
+| `OOT_COMPARE_MOT` | 0 | also run the coil MOT in the same geometry |
 | `OOT_MOT_CURRENT_A` | -1 | MOT reference current, -1 matches the OOT gradient |
+| `OOT_DESIGN_SCAN` | 1 | shift power / waist / detuning scan on the centre ray |

@@ -119,7 +119,8 @@ def force_grid(norm, cfg, v_max_ms=90.0, workers=None, say=print):
 def _key(cfg, v_max_ms):
     blob = json.dumps(dict(cfg, v_max=v_max_ms, half=fts.TRAP_HALF_MM,
                            step=fts.OFFSET_STEP_MM, s=list(fts.build_axial_grid()),
-                           cap=fts.CAPTURE_AXIAL_MM), sort_keys=True)
+                           cap=fts.CAPTURE_AXIAL_MM, dwell=fts.CAPTURE_DWELL_MS,
+                           stop=fts.STOP_FRAC), sort_keys=True)
     return hashlib.md5(blob.encode()).hexdigest()[:10]
 
 

@@ -2,15 +2,12 @@
 on full_trap_sweep's atom beam, MOT beams, slower and CyRK capture map, with
 the coil field replaced by the 1077 nm shift-beam triad.
 
-geometry:
 
     u_hat  along the atom beam, OOT_BEAM_ELEV_DEG from the XY plane (from the
            top down), azimuth FT_BEAM_TILT_DEG from the x MOT pair
     e_h    horizontal, across it
     e_v    u_hat x e_h, across it
 
-The triad is turned about z so one quad beam's axis is u_hat: one of its
-passes counter-propagates the atoms.
 """
 
 import os
@@ -32,6 +29,7 @@ import math
 import time
 
 import CyRK
+import matplotlib.patheffects as pe
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.constants as sp_const
@@ -61,8 +59,11 @@ DOPPLER = bool(fts._envi("OOT_DOPPLER", 1))
 AUTO_SIGN = bool(fts._envi("OOT_AUTO_SIGN", 1))
 
 # Coil MOT in this same geometry; -1 picks the current matching the OOT gradient
-COMPARE_MOT = bool(fts._envi("OOT_COMPARE_MOT", 1))
+COMPARE_MOT = bool(fts._envi("OOT_COMPARE_MOT", 0))
 MOT_CURRENT_A = fts._envf("OOT_MOT_CURRENT_A", -1.0)
+
+# Centre-ray capture velocity over shift power, waist and detuning
+DESIGN_SCAN = bool(fts._envi("OOT_DESIGN_SCAN", 1))
 
 TILT = math.radians(fts.BEAM_TILT_DEG)
 ELEV = math.radians(BEAM_ELEV_DEG)
@@ -78,6 +79,9 @@ LOSS_C = fts.LOSS_C
 ACCENT = fts.ACCENT
 SHIFT_C = "#9467bd"
 MOT_C = "0.35"
+MOT_PAIRS = ((np.array([1.0, 0, 0]), "MOT x pair", TRAP_C),
+             (np.array([0, 1.0, 0]), "MOT y pair", ACCENT),
+             (Z_HAT, "MOT z pair", "#2ca02c"))
 
 
 class _Quiet:
@@ -105,11 +109,12 @@ def triad_phi0():
     return math.pi - psi if U_HAT[2] < 0 else -psi
 
 
-def build_shift_lasers(sign=+1):
+def build_shift_lasers(sign=+1, power_w=SHIFT_POWER_W, waist_m=SHIFT_WAIST_M,
+                       detuning_gamma=SHIFT_DETUNING_GAMMA):
     n = 4 * N_QUAD
-    I = osb.intensity_for_power(SHIFT_POWER_W, SHIFT_WAIST_M, n)
-    return osb.pyramid_beams(I, SHIFT_WAIST_M, math.radians(SHIFT_THETA_DEG),
-                             sign * SHIFT_DETUNING_GAMMA * osb.GAMMA_S, N_QUAD,
+    I = osb.intensity_for_power(power_w, waist_m, n)
+    return osb.pyramid_beams(I, waist_m, math.radians(SHIFT_THETA_DEG),
+                             sign * detuning_gamma * osb.GAMMA_S, N_QUAD,
                              triad_phi0(), RETRO)
 
 
@@ -215,12 +220,12 @@ def ray(norm, bh_mm, bv_mm, s_mm, v_ms):
     return R, U_HAT[:, None, None] * Vs
 
 
-def axial_cell(model, norm, bh_mm, bv_mm, s_mm, v_ms, B=None):
+def axial_cell(model, norm, bh_mm, bv_mm, s_mm, v_ms, B=None, doppler=None):
     """Axial acceleration (n_s, n_v) on one ray: OOT, or MOT given its coil field (3, n_s)."""
     R, V = ray(norm, bh_mm, bv_mm, s_mm, v_ms)
     R, V = R.reshape(3, -1), V.reshape(3, -1)
     if B is None:
-        F = oot_force(model, R, V)
+        F = oot_force(model, R, V, doppler)
     else:
         F = mot_force(model, R, V, np.repeat(B, v_ms.size, axis=1))
     return ((U_HAT @ F) / model["mass"] + model["a_g"]).reshape(s_mm.size, v_ms.size)
@@ -316,6 +321,71 @@ def trajectory(norm, a_cell, s_mm, v_ms, v_launch_ms):
     s, v = np.asarray(sol.y)
     caught = abs(s[-1]) < s_cap and abs(v[-1]) < v_cap
     return s * x0 * 1e3, v * v0, caught
+
+
+def ray_light(model, norm, offs_mm):
+    """Cooling light along each ray near the trap, sum_l s_l |k_l . u| ds in mm."""
+    s = np.linspace(-fts.S_NEAR_MM, fts.S_PAST_TRAP_MM, 221)
+    proj = np.abs(model["cool"].khat @ U_HAT)
+    out = np.zeros((offs_mm.size, offs_mm.size))
+    for i, bh in enumerate(offs_mm):
+        for j, bv in enumerate(offs_mm):
+            R = ray(norm, bh, bv, s, np.zeros(1))[0][:, :, 0]
+            out[i, j] = np.sum(proj @ model["cool"].intensity(R)) * (s[1] - s[0])
+    return out
+
+
+def settle_position(s_mm, v_ms, a_grid):
+    """Stable zero of a(s, v = 0) nearest the centre on each ray, mm; nan if none."""
+    a = a_grid[..., int(np.argmin(np.abs(v_ms)))]
+    hit = (a[..., :-1] > 0) & (a[..., 1:] <= 0)
+    step = np.where(hit, a[..., :-1] - a[..., 1:], 1.0)
+    s0 = np.where(hit, s_mm[:-1] + np.diff(s_mm) * a[..., :-1] / step, np.inf)
+    k = np.argmin(np.abs(s0), axis=-1)
+    out = np.take_along_axis(s0, k[..., None], axis=-1)[..., 0]
+    return np.where(np.isfinite(out), out, np.nan)
+
+
+def potential_depth_mK(model):
+    """Escape barrier from the centre at v = 0, weakest of x, y, z and the atom beam, mK."""
+    r = np.linspace(0.0, 3 * max(SHIFT_WAIST_M, fts.BEAM_WAIST_M), 151) / model["x0"]
+    depth = np.inf
+    for axis in (np.array([1.0, 0, 0]), np.array([0, 1.0, 0]), Z_HAT, U_HAT):
+        for sgn in (+1, -1):
+            d = sgn * axis
+            F = d @ oot_force(model, np.outer(d, r), np.zeros((3, r.size)), False)
+            U = -np.concatenate([[0.0], np.cumsum(0.5 * (F[1:] + F[:-1]) * np.diff(r))])
+            depth = min(depth, U.max())
+    return depth * osb.HBAR * model["gamma"] / sp_const.k * 1e3
+
+
+def design_scan(model, norm, s_mm, v_ms):
+    """Centre-ray v_c, trap frequency and depth over shift power x waist; v_c over detuning."""
+    sign = np.sign(model["delta_s"])
+    s_bar, v_bar = s_mm * 1e-3 / norm["x0"], v_ms / norm["v0"]
+
+    def vc(lasers, doppler=None):
+        a = axial_cell(dict(model, lasers=lasers), norm, 0.0, 0.0, s_mm, v_ms,
+                       doppler=doppler)
+        return fts._capture_cell(norm, s_bar, v_bar, a, s_mm, v_ms[-1])[0]
+
+    P = SHIFT_POWER_W * 2.0 ** np.arange(-3, 3)
+    w = SHIFT_WAIST_M * np.linspace(0.4, 1.6, 7)
+    vc_pw, grad, freq, depth = (np.zeros((P.size, w.size)) for _ in range(4))
+    for i, p in enumerate(P):
+        for j, wj in enumerate(w):
+            lasers = build_shift_lasers(sign, p, wj)
+            m = dict(model, lasers=lasers)
+            vc_pw[i, j] = vc(lasers)
+            grad[i, j] = osb.gradient_tensor(lasers, gF=GJ)[2, 2] * 1e2
+            freq[i, j] = trap_freq_hz(m, stiffness(m, U_HAT))
+            depth[i, j] = potential_depth_mK(m)
+
+    D = np.array([2, 3, 5, 7, 10, 15, 20, 30], dtype=float)
+    vc_d = np.array([[vc(build_shift_lasers(sign, detuning_gamma=d), doppler)
+                      for d in D] for doppler in (True, False)])
+    return dict(P=P, w=w, vc_pw=vc_pw, grad=grad, freq=freq, depth=depth, D=D,
+                vc_d=vc_d)
 
 
 def _project(vec, e1, e2):
@@ -533,6 +603,138 @@ def fig_capture_maps(offs_mm, maps):
     return fig
 
 
+def beam_paths(ax, model):
+    """Where nozzle rays cross each MOT pair and shift pass axis, on an (e_h, e_v) map."""
+    xl, yl = ax.get_xlim(), ax.get_ylim()
+    b = np.array([-3.0, 3.0]) * fts.TRAP_HALF_MM
+    halo = [pe.withStroke(linewidth=3.4, foreground="w", alpha=0.75)]
+    lines = [(np.zeros(3), k, col, "--", lbl) for k, lbl, col in MOT_PAIRS]
+    for n, sb in enumerate(model["lasers"][::2]):
+        first = n % 2 == 0
+        lines.append((sb["Rmat"] @ sb["r0"] * 1e3, sb["k_hat"], SHIFT_C,
+                      "-" if first else ":",
+                      "shift beam, first pass" if first else "shift beam, return pass"))
+    seen = set()
+    for c, k, col, ls, lbl in lines:
+        n_vec = np.cross(U_HAT, k)
+        if np.linalg.norm(n_vec) < 1e-6:
+            lbl = "shift pass along the atom beam"
+            ax.plot(c @ E_H, c @ E_V, marker="X", ms=11, color=col, mec="w", mew=1.2,
+                    ls="none", label=None if lbl in seen else lbl)
+        else:
+            nh, nv, d = E_H @ n_vec, E_V @ n_vec, c @ n_vec
+            x, y = ((d - b * nv) / nh, b) if abs(nh) > abs(nv) else (b, (d - b * nh) / nv)
+            ax.plot(x, y, color=col, ls=ls, lw=1.6, path_effects=halo,
+                    label=None if lbl in seen else lbl)
+        seen.add(lbl)
+    ax.set_xlim(xl)
+    ax.set_ylim(yl)
+
+
+def with_beam_paths(fig, model):
+    """Overlay beam_paths on every image panel of `fig`, legend on the first."""
+    panels = [ax for ax in fig.axes if ax.images]
+    for ax in panels:
+        beam_paths(ax, model)
+    if panels:
+        panels[0].legend(loc="lower left", fontsize=7, framealpha=0.85)
+    return fig
+
+
+def fig_capture_diagnosis(model, norm, offs_mm, s_mm, v_ms, a_grid, vc, t_stop):
+    """What sets the v_c map: cooling light per ray, where atoms settle, how long it takes."""
+    fig, axes = plt.subplots(2, 2, figsize=(13.5, 11.5), constrained_layout=True)
+    ext = fts._cell_extent(offs_mm)
+    light = ray_light(model, norm, offs_mm)
+    settle = settle_position(s_mm, v_ms, a_grid)
+    live = vc > 0
+
+    ax = axes[0, 0]
+    im = ax.imshow(vc.T, origin="lower", extent=ext, cmap="magma", aspect="equal")
+    fig.colorbar(im, ax=ax, label="capture velocity [m s$^{-1}$]")
+    ax.set_title("(a) capture velocity and the beam axes each ray crosses")
+
+    ax = axes[0, 1]
+    im = ax.imshow(light.T, origin="lower", extent=ext, cmap="viridis", aspect="equal")
+    fig.colorbar(im, ax=ax, label=r"$\int \sum_l s_l\,|\hat k_l\cdot\hat u|\,ds$ [mm]")
+    r = np.corrcoef(vc[live], light[live])[0, 1] if live.sum() > 2 else float("nan")
+    ax.set_title(f"(b) cooling light along each ray, correlation with $v_c$ {r:.2f}")
+
+    ax = axes[1, 0]
+    lim = max(np.nanmax(np.abs(settle)), fts.CAPTURE_AXIAL_MM) if np.isfinite(settle).any() else 1.0
+    im = ax.imshow(settle.T, origin="lower", extent=ext, cmap="RdBu_r", aspect="equal",
+                   vmin=-lim, vmax=lim)
+    fig.colorbar(im, ax=ax, label="rest point along the ray [mm]")
+    if np.isfinite(settle).any():
+        ax.contour(offs_mm, offs_mm, np.abs(np.nan_to_num(settle.T, nan=99.0)),
+                   levels=[fts.CAPTURE_AXIAL_MM], colors="k", linewidths=1.2)
+    ax.set_title(f"(c) where a stopped atom settles; black: $\\pm${fts.CAPTURE_AXIAL_MM:g} mm "
+                 "capture box edge")
+
+    ax = axes[1, 1]
+    im = ax.imshow(np.where(live, t_stop * 1e3, np.nan).T, origin="lower", extent=ext,
+                   cmap="cividis", aspect="equal")
+    fig.colorbar(im, ax=ax, label="stopping time [ms]")
+    ax.set_title(f"(d) stopping time of an atom at {fts.STOP_FRAC:g} $v_c$, "
+                 "used by the drift cut")
+
+    for a in axes.ravel():
+        a.set_xlabel("horizontal offset $e_h$ [mm]")
+        a.set_ylabel("offset $e_v$ [mm]")
+    with_beam_paths(fig, model)
+    for a in axes.ravel()[1:]:
+        if a.get_legend():
+            a.get_legend().remove()
+    return fig
+
+
+def fig_design_scan(scan, model):
+    """Shift power, waist and detuning against what they buy: v_c, stiffness, depth."""
+    fig, axes = plt.subplots(2, 2, figsize=(15, 11.5), constrained_layout=True)
+    P, w = scan["P"], scan["w"] * 1e3
+    maps = ((axes[0, 0], scan["vc_pw"], "magma", "centre-ray capture velocity [m s$^{-1}$]",
+             "(a) capture velocity; white: z gradient [G/cm]", 0.0),
+            (axes[0, 1], scan["freq"], "viridis", "trap frequency along the atom beam [Hz]",
+             "(b) stiffness at the centre", 0.0),
+            (axes[1, 0], scan["depth"], "cividis", "potential depth [mK]",
+             "(c) escape barrier, weakest of x, y, z and the atom beam", None))
+    for ax, data, cmap, label, title, vmin in maps:
+        im = ax.pcolormesh(P, w, data.T, cmap=cmap, shading="nearest", vmin=vmin)
+        fig.colorbar(im, ax=ax, label=label)
+        ax.plot(SHIFT_POWER_W, SHIFT_WAIST_M * 1e3, marker="D", ms=9, color=SHIFT_C,
+                mec="w", mew=1.5, ls="none", label="this run")
+        ax.set_xscale("log")
+        ax.set_xticks(P, [f"{p:.3g}" for p in P])
+        ax.minorticks_off()
+        ax.set_xlabel("shift power summed over every pass [W]")
+        ax.set_ylabel("shift beam waist w [mm]")
+        ax.set_title(title)
+    cs = axes[0, 0].contour(P, w, np.abs(scan["grad"]).T,
+                            levels=[2, 5, 10, 20, 50, 100, 200], colors="w",
+                            linewidths=0.9)
+    axes[0, 0].clabel(cs, inline=True, fontsize=8, fmt="%g")
+    axes[0, 0].legend(loc="upper left", fontsize=9)
+
+    ax = axes[1, 1]
+    ax.plot(scan["D"], scan["vc_d"][0], "o-", color=SHIFT_C, lw=2.2,
+            label="Doppler-shifted shift beams")
+    ax.plot(scan["D"], scan["vc_d"][1], "s--", color=MOT_C, lw=1.6,
+            label="static $B_{eff}$")
+    ax.axvline(abs(model["delta_s"]) / osb.GAMMA_S, color="0.6", lw=1.0, ls=":")
+    ax.set_xscale("log")
+    ax.set_xticks(scan["D"], [f"{d:g}" for d in scan["D"]])
+    ax.minorticks_off()
+    ax.set_xlabel("|shift detuning| [$\\Gamma_s$]")
+    ax.set_ylabel("centre-ray capture velocity [m s$^{-1}$]")
+    ax.set_title(f"(d) capture velocity vs detuning at {SHIFT_POWER_W:g} W, "
+                 f"w = {SHIFT_WAIST_M * 1e3:g} mm")
+    ax.legend(fontsize=9)
+    ax.grid(alpha=0.25, which="both")
+    fig.suptitle(f"Shift-beam design scan at |$\\Delta_s$| = "
+                 f"{abs(model['delta_s']) / osb.GAMMA_S:g} $\\Gamma_s$ (a-c)", fontsize=13)
+    return fig
+
+
 def fig_oot_vs_mot(rows, rows_mot, t_free_mol_c, label_mot):
     fig, axes = plt.subplots(1, 2, figsize=(14, 5.6), constrained_layout=True)
     T = np.asarray([r["T_c"] for r in rows])
@@ -688,6 +890,11 @@ def main():
         maps = [("OOT", vc)] + ([("coil MOT", mot["vc"])] if mot else [])
         run.figure(fig_capture_maps(offs_mm, maps), "capture_velocity_map",
                    close=True)
+        run.figure(with_beam_paths(fig_capture_maps(offs_mm, maps), model),
+                   "capture_velocity_map_beam_paths", close=True)
+        run.figure(fig_capture_diagnosis(model, norm, offs_mm, s_mm, v_ms, a_grid,
+                                         vc, t_stop),
+                   "capture_map_diagnosis", close=True)
         run.figure(fts.fig_tilt_asymmetry(norm, offs_mm, s_mm, v_ms, a_grid, vc),
                    "tilt_induced_capture_asymmetry", close=True)
 
@@ -695,12 +902,30 @@ def main():
         show_T = [fts.T_MIN_C, 0.5 * (fts.T_MIN_C + fts.T_MAX_C), fts.T_MAX_C]
         run.figure(fts.fig_cross_section(data, aux, vc, offs_mm, show_T[1]),
                    "beam_cross_section_trapped_fraction", close=True)
+        run.figure(with_beam_paths(fts.fig_cross_section(data, aux, vc, offs_mm,
+                                                         show_T[1]), model),
+                   "beam_cross_section_trapped_fraction_beam_paths", close=True)
         run.figure(fts.fig_cross_section_vs_T(data, aux, show_T, offs_mm),
                    "trapped_fraction_vs_temperature", close=True)
+        run.figure(with_beam_paths(fts.fig_cross_section_vs_T(data, aux, show_T,
+                                                              offs_mm), model),
+                   "trapped_fraction_vs_temperature_beam_paths", close=True)
         run.figure(fts.fig_rate_vs_temperature(temps_c, rows, t_free_mol_c),
                    "load_rate_and_trapped_number", close=True)
         run.figure(fts.fig_speed_vs_capture(data, aux, vc, show_T),
                    "arriving_speed_vs_capture_velocity", close=True)
+        scan = None
+        if DESIGN_SCAN:
+            t_scan = time.time()
+            scan = design_scan(model, norm, s_mm, v_ms)
+            run.figure(fig_design_scan(scan, model), "shift_beam_design_scan",
+                       close=True)
+            np.savez_compressed(run.out("design_scan.npz"), **scan)
+            run.file("design_scan.npz", "design-scan")
+            i, j = np.unravel_index(np.argmax(scan["vc_pw"]), scan["vc_pw"].shape)
+            run.say(f"design scan ({time.time() - t_scan:.0f} s): centre-ray v_c "
+                    f"{scan['vc_pw'].min():.1f} to {scan['vc_pw'].max():.1f} m/s, best at "
+                    f"{scan['P'][i]:.2f} W, w = {scan['w'][j] * 1e3:.1f} mm")
         if mot is not None:
             run.figure(fig_oot_vs_mot(rows, mot["rows"], t_free_mol_c,
                                       f"coil MOT, {model['coil_gradient_G_cm']:.1f} G/cm"),
@@ -760,7 +985,14 @@ def main():
             "load_rate_at_nearest_400C": at_400["rate"],
             "load_rate_reported_at_C": at_400["T_c"],
             "free_molecular_limit_C": t_free_mol_c,
+            "median_stopping_time_ms": float(np.median(t_stop[vc > 0]) * 1e3)
+            if (vc > 0).any() else float("nan"),
         }
+        if scan is not None:
+            i, j = np.unravel_index(np.argmax(scan["vc_pw"]), scan["vc_pw"].shape)
+            summary.update(design_scan_best_centre_vc_m_per_s=float(scan["vc_pw"][i, j]),
+                           design_scan_best_power_W=float(scan["P"][i]),
+                           design_scan_best_waist_mm=float(scan["w"][j] * 1e3))
         if mot is not None:
             m400 = min(mot["rows"], key=lambda r: abs(r["T_c"] - 400.0))
             summary.update(
