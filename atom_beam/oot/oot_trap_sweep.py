@@ -17,10 +17,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ATOM_BEAM = os.path.dirname(HERE)
 sys.path.append(ATOM_BEAM)
 
-# Slower off: with no coil field to tune it out of resonance near the trap it pushes
-# slow atoms back out, leaving only a ~2 m/s wide capture band near 100 m/s
 for _k, _v in dict(FT_NOZZLE_CACHE=os.path.join(ATOM_BEAM, "nozzle_trace_cache.npz"),
-                   FT_SLOWER=0, RUNLOG_ROOT=os.path.join(HERE, "runs")).items():
+                   FT_SLOWER=1, RUNLOG_ROOT=os.path.join(HERE, "runs")).items():
     os.environ.setdefault(_k, str(_v))
 
 import full_trap_sweep as fts
