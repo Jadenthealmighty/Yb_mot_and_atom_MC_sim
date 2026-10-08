@@ -43,9 +43,8 @@ oot_rate_eq.py       J=0 -> J=1 steady-state rate equations for any 3x3
 | shift detuning | 10 Gamma_s, sign chosen so the MOT polarizations trap (`OOT_AUTO_SIGN`) |
 | light shift | second order, summed incoherently over the 12 circular components, 1/Delta regularised by Gamma_s |
 | Doppler | each shift component sees Delta - k_s . v (`OOT_DOPPLER=0` gives the paper's static B_eff) |
-| atom beam | 45 deg below the XY plane, coming from the top, 25.5 deg azimuth; one triad axis antiparallel to it |
-| gravity | projected onto the atom beam |
-| slowing beam | off by default (`FT_SLOWER=1` to turn it on) |
+| atom beam | horizontal, 25.5 deg from the x MOT pair, as in the MOT; one triad axis in its vertical plane |
+| slowing beam | off by default (`FT_SLOWER=1` to turn it on): without a coil field it only lets a ~2 m/s band near 100 m/s through |
 | MOT reference | exact coil field, current scaled to the same central gradient (`OOT_MOT_CURRENT_A` to fix it) |
 
 Every `FT_*` variable of `full_trap_sweep.py` still applies. The nozzle trace is
@@ -54,7 +53,7 @@ read from `atom_beam/nozzle_trace_cache.npz` with its own atom count unless
 
 | env | default | meaning |
 |---|---|---|
-| `OOT_BEAM_ELEV_DEG` | -45 | atom beam angle from the XY plane |
+| `OOT_TRIAD_ROT_DEG` | 0 | extra turn of the triad about z (180 flips which pass comes down against the atoms) |
 | `OOT_SHIFT_POWER_W` | 2.0 | shift power summed over every pass (paper's P) |
 | `OOT_SHIFT_WAIST_M` | 0.01 | shift beam 1/e^2 radius |
 | `OOT_SHIFT_DETUNING_GAMMA` | 10 | shift detuning in units of Gamma_s = 3.0e7 /s |

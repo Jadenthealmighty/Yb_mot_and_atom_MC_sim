@@ -1886,8 +1886,7 @@ def fig_speed_vs_capture(data, aux, vc, temps):
     ax.axvline(vc.min(), color=LOSS_C, lw=1.6, ls="--", label="worst-corner $v_c$")
     ax.set_xlabel("axial speed on arrival [m s$^{-1}$]")
     ax.set_ylabel("atoms per bin")
-    ax.set_title("Zoomed on the capturable tail\n"
-                 r"flux distribution goes as $v^3$, so this tail is thin")
+    ax.set_title("Zoomed on the capturable tail")
     ax.legend(fontsize=9)
 
     for a in axes:

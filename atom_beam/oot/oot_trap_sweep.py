@@ -3,10 +3,10 @@ on full_trap_sweep's atom beam, MOT beams, slower and CyRK capture map, with
 the coil field replaced by the 1077 nm shift-beam triad.
 
 
-    u_hat  along the atom beam, OOT_BEAM_ELEV_DEG from the XY plane (from the
-           top down), azimuth FT_BEAM_TILT_DEG from the x MOT pair
+    u_hat  along the atom beam, horizontal, FT_BEAM_TILT_DEG from the x MOT pair
+           (full_trap_sweep's U_HAT)
     e_h    horizontal, across it
-    e_v    u_hat x e_h, across it
+    e_v    vertical
 
 """
 
@@ -17,8 +17,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ATOM_BEAM = os.path.dirname(HERE)
 sys.path.append(ATOM_BEAM)
 
-# Slower off: it shares the counter-propagating axis with a triad beam, and with
-# no coil field to tune it out near the trap it pushes slow atoms back out
+# Slower off: with no coil field to tune it out of resonance near the trap it pushes
+# slow atoms back out, leaving only a ~2 m/s wide capture band near 100 m/s
 for _k, _v in dict(FT_NOZZLE_CACHE=os.path.join(ATOM_BEAM, "nozzle_trace_cache.npz"),
                    FT_SLOWER=0, RUNLOG_ROOT=os.path.join(HERE, "runs")).items():
     os.environ.setdefault(_k, str(_v))
@@ -44,7 +44,8 @@ import helpers.yb174_mot_simulation as sim
 import oot_rate_eq as req
 import oot_shift_beams as osb
 
-BEAM_ELEV_DEG = fts._envf("OOT_BEAM_ELEV_DEG", -45.0)
+# Extra turn of the triad about z; 0 puts one axis in the atom beam's vertical plane
+TRIAD_ROT_DEG = fts._envf("OOT_TRIAD_ROT_DEG", 0.0)
 
 SHIFT_POWER_W = fts._envf("OOT_SHIFT_POWER_W", 2.0)
 SHIFT_WAIST_M = fts._envf("OOT_SHIFT_WAIST_M", 0.01)
@@ -66,11 +67,9 @@ MOT_CURRENT_A = fts._envf("OOT_MOT_CURRENT_A", -1.0)
 DESIGN_SCAN = bool(fts._envi("OOT_DESIGN_SCAN", 1))
 
 TILT = math.radians(fts.BEAM_TILT_DEG)
-ELEV = math.radians(BEAM_ELEV_DEG)
-U_HAT = np.array([math.cos(TILT) * math.cos(ELEV),
-                  math.sin(TILT) * math.cos(ELEV), math.sin(ELEV)])
-E_H = np.array([-math.sin(TILT), math.cos(TILT), 0.0])
-E_V = np.cross(U_HAT, E_H)
+U_HAT = fts.U_HAT
+E_H = fts.E_H
+E_V = fts.E_V
 Z_HAT = np.array([0.0, 0.0, 1.0])
 
 GJ = sim.YB174_GJ_EXCITED
@@ -104,9 +103,9 @@ def reuse_nozzle_cache():
 
 
 def triad_phi0():
-    """Azimuth that puts one triad axis along u_hat."""
-    psi = math.atan2(-U_HAT[1], -U_HAT[0])
-    return math.pi - psi if U_HAT[2] < 0 else -psi
+    """Azimuth that puts one triad axis in the atom beam's vertical plane, its
+    upward pass against the atoms and its return coming down along them."""
+    return -TILT + math.radians(TRIAD_ROT_DEG)
 
 
 def build_shift_lasers(sign=+1, power_w=SHIFT_POWER_W, waist_m=SHIFT_WAIST_M,
@@ -447,8 +446,8 @@ def fig_oot_geometry(model):
         ax.grid(alpha=0.2)
     axes[0].legend(loc="lower left", fontsize=8, framealpha=0.9)
     fig.suptitle(f"OOT geometry: {N_QUAD} quad beams at {SHIFT_THETA_DEG:.0f}$^\\circ$ "
-                 f"from z, atom beam {BEAM_ELEV_DEG:+.0f}$^\\circ$ from the XY plane, "
-                 f"{fts.BEAM_TILT_DEG:.1f}$^\\circ$ from x", fontsize=12)
+                 f"from z, horizontal atom beam {fts.BEAM_TILT_DEG:.1f}$^\\circ$ "
+                 "from x", fontsize=12)
     return fig
 
 
@@ -608,23 +607,25 @@ def beam_paths(ax, model):
     xl, yl = ax.get_xlim(), ax.get_ylim()
     b = np.array([-3.0, 3.0]) * fts.TRAP_HALF_MM
     halo = [pe.withStroke(linewidth=3.4, foreground="w", alpha=0.75)]
-    lines = [(np.zeros(3), k, col, "--", lbl) for k, lbl, col in MOT_PAIRS]
+    dash = ((0, (5, 5)), (5, (5, 5)), (0, (5, 5)))
+    lines = [(np.zeros(3), k, col, ls, lbl, 4)
+             for (k, lbl, col), ls in zip(MOT_PAIRS, dash)]
     for n, sb in enumerate(model["lasers"][::2]):
         first = n % 2 == 0
         lines.append((sb["Rmat"] @ sb["r0"] * 1e3, sb["k_hat"], SHIFT_C,
                       "-" if first else ":",
-                      "shift beam, first pass" if first else "shift beam, return pass"))
+                      "shift beam, first pass" if first else "shift beam, return pass", 3))
     seen = set()
-    for c, k, col, ls, lbl in lines:
+    for c, k, col, ls, lbl, z in lines:
         n_vec = np.cross(U_HAT, k)
         if np.linalg.norm(n_vec) < 1e-6:
-            lbl = "shift pass along the atom beam"
+            lbl = "shift beam intersects atom beam"
             ax.plot(c @ E_H, c @ E_V, marker="X", ms=11, color=col, mec="w", mew=1.2,
                     ls="none", label=None if lbl in seen else lbl)
         else:
             nh, nv, d = E_H @ n_vec, E_V @ n_vec, c @ n_vec
             x, y = ((d - b * nv) / nh, b) if abs(nh) > abs(nv) else (b, (d - b * nh) / nv)
-            ax.plot(x, y, color=col, ls=ls, lw=1.6, path_effects=halo,
+            ax.plot(x, y, color=col, ls=ls, lw=1.6, path_effects=halo, zorder=z,
                     label=None if lbl in seen else lbl)
         seen.add(lbl)
     ax.set_xlim(xl)
@@ -658,7 +659,7 @@ def fig_capture_diagnosis(model, norm, offs_mm, s_mm, v_ms, a_grid, vc, t_stop):
     im = ax.imshow(light.T, origin="lower", extent=ext, cmap="viridis", aspect="equal")
     fig.colorbar(im, ax=ax, label=r"$\int \sum_l s_l\,|\hat k_l\cdot\hat u|\,ds$ [mm]")
     r = np.corrcoef(vc[live], light[live])[0, 1] if live.sum() > 2 else float("nan")
-    ax.set_title(f"(b) cooling light along each ray, correlation with $v_c$ {r:.2f}")
+    ax.set_title(f"(b) cooling light experienced by each ray (correlation with $v_c$ {r:.2f})")
 
     ax = axes[1, 0]
     lim = max(np.nanmax(np.abs(settle)), fts.CAPTURE_AXIAL_MM) if np.isfinite(settle).any() else 1.0
@@ -668,7 +669,7 @@ def fig_capture_diagnosis(model, norm, offs_mm, s_mm, v_ms, a_grid, vc, t_stop):
     if np.isfinite(settle).any():
         ax.contour(offs_mm, offs_mm, np.abs(np.nan_to_num(settle.T, nan=99.0)),
                    levels=[fts.CAPTURE_AXIAL_MM], colors="k", linewidths=1.2)
-    ax.set_title(f"(c) where a stopped atom settles; black: $\\pm${fts.CAPTURE_AXIAL_MM:g} mm "
+    ax.set_title(f"(c) where atom settles along the ray; black: $\\pm${fts.CAPTURE_AXIAL_MM:g} mm "
                  "capture box edge")
 
     ax = axes[1, 1]
@@ -775,15 +776,17 @@ def main():
     beta_paper = osb.paper_gradient(SHIFT_POWER_W, SHIFT_WAIST_M,
                                     math.radians(SHIFT_THETA_DEG),
                                     model["delta_s"], gF=GJ)[2, 2] * 1e2 * reg
-    align = max(-(b["k_hat"] @ U_HAT) for b in model["lasers"])
+    k_back = max((b["k_hat"] for b in model["lasers"]),
+                 key=lambda k: -(k[:2] @ U_HAT[:2]) / max(np.linalg.norm(k[:2]), 1e-12))
+    align = -(k_back[:2] @ U_HAT[:2]) / np.linalg.norm(k_back[:2])
     k_z = stiffness(model, Z_HAT)
     k_u = stiffness(model, U_HAT)
     laser_power = osb.total_power(model["lasers"], retro_reflected=RETRO)
     cool = model["cool_info"]
 
     params = {
-        "atom_beam_elevation_deg": BEAM_ELEV_DEG,
         "atom_beam_azimuth_deg": fts.BEAM_TILT_DEG,
+        "triad_extra_rotation_deg": TRIAD_ROT_DEG,
         "atom_beam_u_hat": U_HAT.tolist(),
         "nozzle_to_trap_mm": fts.NOZZLE_TO_TRAP_MM,
         "trap_half_width_mm": fts.TRAP_HALF_MM,
@@ -819,13 +822,10 @@ def main():
     with runlog.start("yb-oot-trap-sweep", params=fts.json_safe(params),
                       note="oven -> nozzle -> 344 mm -> OOT capture, "
                            "shift-beam triad instead of coils") as run:
-        run.say(f"atom beam u = ({U_HAT[0]:+.3f}, {U_HAT[1]:+.3f}, {U_HAT[2]:+.3f}): "
-                f"{BEAM_ELEV_DEG:+.1f} deg from the XY plane, "
-                f"{fts.BEAM_TILT_DEG:.1f} deg azimuth; triad axis antiparallel to "
-                f"it to cos = {align:.6f}")
-        if align < 0.999:
-            run.say("WARNING: no triad beam counter-propagates the atom beam; "
-                    f"OOT_BEAM_ELEV_DEG should be -(90 - {SHIFT_THETA_DEG:g}).")
+        run.say(f"atom beam horizontal, {fts.BEAM_TILT_DEG:.1f} deg from the x pair; "
+                f"shift pass most against it: k = ({k_back[0]:+.3f}, {k_back[1]:+.3f}, "
+                f"{k_back[2]:+.3f}), {math.degrees(math.asin(k_back[2])):+.0f} deg "
+                f"elevation, horizontal part antiparallel to cos = {align:.4f}")
         run.say(f"shift beams: {N_QUAD} quad beams, {4 * N_QUAD} circular components, "
                 f"{SHIFT_POWER_W:g} W over every pass ({laser_power:.2f} W of laser"
                 f"{', retro-reflected' if RETRO else ''}), w = {SHIFT_WAIST_M * 1e3:.1f} mm, "
