@@ -27,6 +27,7 @@ atom_beam/
 ├── archived/               older copies, kept for reference, not imported
 ├── pre_computed/           saved outputs from nozzle trace
 ├── runs/                   simulation results
+└── oot/                    Opto-Optical Trap simulations, see oot/README.md
 ```
 
 
@@ -38,12 +39,17 @@ atom_beam/
     python full_trap_sweep.py
     python beam_sweep.py
 
-beam_sweep takes ~1 h for the default 5 x 5 grid and can be restarted 
+Alternatively, run
+    FT_SLOWER=0 python full_trap_sweep.py
+
+or other paramters in place of FT_SLOWER=0 for changing variables and parameters. (in this case whether the slowing beam is ON or OFF)
+
+
+beam_sweep takes ~3 minutes for the default grid and can be restarted 
 
 
 
 ## Going to add:
-- full_trap_sweep sweeping
 - Interactor for the full_sweep
 - Guide for usage
 
