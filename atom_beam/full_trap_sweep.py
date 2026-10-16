@@ -2093,6 +2093,8 @@ def main():
         "coil_turns_bottom": cfm.N_TURNS_BOTTOM,
         "coil_ref_current_top_A": cfm.REF_CURRENT_TOP_A,
         "coil_ref_current_bottom_A": cfm.REF_CURRENT_BOTTOM_A,
+        "coil_dz_top_mm": cfm.DZ_TOP_MM,
+        "coil_dz_bottom_mm": cfm.DZ_BOTTOM_MM,
         "coil_field_zero_z_mm": cfm.field_zero_z_mm(),
         "nozzle_atoms": NOZZLE_ATOMS,
         "n_channels": n3.N_CHAN_Y * n3.N_CHAN_Z,

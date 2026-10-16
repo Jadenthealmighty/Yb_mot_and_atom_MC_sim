@@ -28,7 +28,6 @@ TOTAL_TURNS = TOTAL_COILS * TURNS_PER_COIL
 N_RADIAL = N_TOP_COILS * LAYERS_PER_COIL
 
 TURNS_PER_SIDE = N_TOP_COILS * TURNS_PER_COIL
-# N_TURNS_TOP = 0.9 * TURNS_PER_SIDE#float(os.environ.get("FT_COIL_TURNS_TOP", TURNS_PER_SIDE))
 N_TURNS_TOP = float(os.environ.get("FT_COIL_TURNS_TOP", TURNS_PER_SIDE))
 N_TURNS_BOTTOM = float(os.environ.get("FT_COIL_TURNS_BOTTOM", TURNS_PER_SIDE))
 
@@ -38,8 +37,11 @@ HEIGHT_POSITIONS_MM = GAP_BETWEEN_COILS_MM / 2 + WIRE_SIDE_MM / 2 + np.arange(TU
 
 REFERENCE_CURRENT_A = 1.0
 REF_CURRENT_TOP_A = float(os.environ.get("FT_COIL_REF_A_TOP", REFERENCE_CURRENT_A))
-# REF_CURRENT_BOTTOM_A = 0.9176 #float(os.environ.get("FT_COIL_REF_A_BOTTOM", REFERENCE_CURRENT_A))
 REF_CURRENT_BOTTOM_A = float(os.environ.get("FT_COIL_REF_A_BOTTOM", REFERENCE_CURRENT_A))
+
+DZ_TOP_MM = float(os.environ.get("FT_COIL_DZ_TOP_MM", 0.0))
+DZ_BOTTOM_MM = float(os.environ.get("FT_COIL_DZ_BOTTOM_MM", 0.0))
+
 
 
 _MAGPY_MAJOR = int(magpy.__version__.split('.')[0])
@@ -63,10 +65,11 @@ def _get_unit_collection():
         return _cached_collection
 
     coils = magpy.Collection()
-    for sign, n_turns, ref_a in ((+1, N_TURNS_TOP, REF_CURRENT_TOP_A),
-                                 (-1, N_TURNS_BOTTOM, REF_CURRENT_BOTTOM_A)):
+    for sign, n_turns, ref_a, dz in (
+            (+1, N_TURNS_TOP, REF_CURRENT_TOP_A, DZ_TOP_MM),
+            (-1, N_TURNS_BOTTOM, REF_CURRENT_BOTTOM_A, DZ_BOTTOM_MM)):
         for loop_height, fill in zip(*stack_rows(n_turns)):
-            height = sign * loop_height * 1e-3 * _LENGTH_PER_M
+            height = (sign * loop_height + dz) * 1e-3 * _LENGTH_PER_M
             for loop_radius in RADIUS_POSITIONS_MM:
                 diameter = 2 * loop_radius * 1e-3 * _LENGTH_PER_M
                 coils.add(magpy.current.Circle(
@@ -217,5 +220,6 @@ if __name__ == '__main__':
 
     print(f"\n  turns: top {N_TURNS_TOP:g}, bottom {N_TURNS_BOTTOM:g} "
           f"(nominal {TURNS_PER_SIDE} each); current per {REFERENCE_CURRENT_A:g} A: "
-          f"top {REF_CURRENT_TOP_A:g}, bottom {REF_CURRENT_BOTTOM_A:g}; field zero at z = "
+          f"top {REF_CURRENT_TOP_A:g}, bottom {REF_CURRENT_BOTTOM_A:g}; "
+          f"z offsets: top {DZ_TOP_MM:+g} mm, bottom {DZ_BOTTOM_MM:+g} mm; field zero at z = "
           f"{field_zero_z_mm():+.2f} mm")

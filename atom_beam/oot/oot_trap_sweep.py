@@ -18,7 +18,7 @@ ATOM_BEAM = os.path.dirname(HERE)
 sys.path.append(ATOM_BEAM)
 
 for _k, _v in dict(FT_NOZZLE_CACHE=os.path.join(ATOM_BEAM, "nozzle_trace_cache.npz"),
-                   FT_SLOWER=1, RUNLOG_ROOT=os.path.join(HERE, "runs")).items():
+                   FT_SLOWER=0, RUNLOG_ROOT=os.path.join(HERE, "runs")).items():
     os.environ.setdefault(_k, str(_v))
 
 import full_trap_sweep as fts
