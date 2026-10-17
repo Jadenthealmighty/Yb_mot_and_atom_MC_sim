@@ -17,6 +17,9 @@ WIRE_SIDE_MM = 6
 COOLING_BORE_MM = 4
 GAP_BETWEEN_COILS_MM = 70
 
+
+
+
 N_TOP_COILS = 4
 LAYERS_PER_COIL = 2
 TURNS_PER_LAYER = int(COIL_STACK_HEIGHT_MM / WIRE_SIDE_MM)
@@ -28,17 +31,29 @@ TOTAL_TURNS = TOTAL_COILS * TURNS_PER_COIL
 N_RADIAL = N_TOP_COILS * LAYERS_PER_COIL
 
 TURNS_PER_SIDE = N_TOP_COILS * TURNS_PER_COIL
+
+#Change number of turns top and bottom
 N_TURNS_TOP = float(os.environ.get("FT_COIL_TURNS_TOP", TURNS_PER_SIDE))
 N_TURNS_BOTTOM = float(os.environ.get("FT_COIL_TURNS_BOTTOM", TURNS_PER_SIDE))
 
+
+# These give the roughly 5mm offset from geometric center we saw:
+
+N_TURNS_TOP = 63
+N_TURNS_BOTTOM = 57
 
 RADIUS_POSITIONS_MM = INNER_RADIUS_MM + WIRE_SIDE_MM / 2 + np.arange(N_RADIAL) * WIRE_SIDE_MM
 HEIGHT_POSITIONS_MM = GAP_BETWEEN_COILS_MM / 2 + WIRE_SIDE_MM / 2 + np.arange(TURNS_PER_LAYER) * WIRE_SIDE_MM
 
 REFERENCE_CURRENT_A = 1.0
+
+# Change current for top and bottom, for example 90% use 0.9 since reference current is 1.0
 REF_CURRENT_TOP_A = float(os.environ.get("FT_COIL_REF_A_TOP", REFERENCE_CURRENT_A))
 REF_CURRENT_BOTTOM_A = float(os.environ.get("FT_COIL_REF_A_BOTTOM", REFERENCE_CURRENT_A))
 
+
+#OFFSETS FOR MOT COILS, in Z direction
+# I found that -9.8 mm for the bottom reset the center to the geometric center
 DZ_TOP_MM = float(os.environ.get("FT_COIL_DZ_TOP_MM", 0.0))
 DZ_BOTTOM_MM = float(os.environ.get("FT_COIL_DZ_BOTTOM_MM", 0.0))
 
