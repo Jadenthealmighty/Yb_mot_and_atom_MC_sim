@@ -164,8 +164,10 @@ def build_trap_beams(norm, delta_bar, *, waist_m, power_w, pol=+1,
     norm : dict
         From yb174_mot_simulation.build_normalization()
     delta_bar : float or callable in Gamma units
-    waist_m, power_w : float
-        1/e^2 radius and power of EACH MOT arm
+    waist_m : float
+        1/e^2 radius of each MOT arm
+    power_w : float or 6 floats
+        Power of EACH MOT arm, per arm in MOT_KVECS order if a sequence
     alignment : BeamAlignment or None
         None means perfectly aligned.
     slower : dict or None
@@ -182,12 +184,13 @@ def build_trap_beams(norm, delta_bar, *, waist_m, power_w, pol=+1,
     x0 = norm["x0"]
     isat = norm["Isat_SI"]
 
-    s_peak = 2.0 * power_w / (math.pi * waist_m ** 2) / isat
+    s_peaks = (2.0 * np.broadcast_to(np.asarray(power_w, dtype=float), (6,))
+               / (math.pi * waist_m ** 2) / isat)
     wb_bar = waist_m / x0
 
     beams = []
     pols = MOT_POLS(pol)
-    for i, (kvec, p) in enumerate(zip(MOT_KVECS, pols)):
+    for i, (kvec, p, s_peak) in enumerate(zip(MOT_KVECS, pols, s_peaks)):
         khat = kvec
         tilt = alignment.mot_tilts_rad.get(i)
         if tilt is not None:
@@ -196,10 +199,11 @@ def build_trap_beams(norm, delta_bar, *, waist_m, power_w, pol=+1,
         offset_bar = (np.zeros(3) if offset_m is None
                       else np.asarray(offset_m, dtype=float) / x0)
         beams.append(OffsetGaussianBeam(
-            kvec=khat, pol=p, s=s_peak, delta=delta_bar, wb=wb_bar,
+            kvec=khat, pol=p, s=float(s_peak), delta=delta_bar, wb=wb_bar,
             offset=offset_bar))
 
-    info = dict(mot_s_peak=s_peak, mot_waist_m=waist_m,
+    info = dict(mot_s_peak=float(s_peaks[0]),
+                mot_s_peak_per_arm=s_peaks.tolist(), mot_waist_m=waist_m,
                 mot_power_w=power_w, n_beams=len(beams),
                 alignment=alignment.describe())
 

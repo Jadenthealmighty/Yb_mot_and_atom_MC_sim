@@ -73,6 +73,8 @@ BEAM_TILT_DEG = _envf("FT_BEAM_TILT_DEG", 25.5)
 
 BEAM_WAIST_M = _envf("FT_WAIST_M", 0.005)
 BEAM_AVG_SAT = _envf("FT_AVG_SAT", 0.1)
+# vertical (z) arm power over horizontal, BEAM_AVG_SAT is the horizontal
+MOT_V_RATIO = _envf("FT_MOT_V_RATIO", 1.0)
 
 NOZZLE_ATOMS = _envi("FT_NOZZLE_ATOMS", 1_200_000_000)
 NOZZLE_CHUNKS = _envi("FT_NOZZLE_CHUNKS", 1500)
@@ -813,7 +815,8 @@ def build_mot(norm, alignment=None, slower_detuning_hz=None,
         )
 
     laserBeams, beam_info = tb.build_trap_beams(
-        norm, delta_bar, waist_m=BEAM_WAIST_M, power_w=power_w,
+        norm, delta_bar, waist_m=BEAM_WAIST_M,
+        power_w=(power_w,) * 4 + (MOT_V_RATIO * power_w,) * 2,
         alignment=alignment, slower=slower_cfg,
         wavelength_m=sim.YB174_WAVELENGTH_M)
 
@@ -2085,6 +2088,7 @@ def main():
         "beam_average_saturation": BEAM_AVG_SAT,
         "beam_power_per_arm_W": power_w,
         "beam_peak_saturation": 2.0 * BEAM_AVG_SAT,
+        "mot_vertical_power_ratio": MOT_V_RATIO,
         "Isat_mW_per_cm2": norm["Isat_mW_cm2"],
         "detuning_Hz": DETUNING_HZ,
         "detuning_over_Gamma": DETUNING_HZ / sim.YB174_LINEWIDTH_HZ,
@@ -2124,7 +2128,9 @@ def main():
                 f"P = {power_w * 1e3:.3f} mW per arm "
                 f"-> I_avg = {BEAM_AVG_SAT:.2f} Isat, peak s0 = "
                 f"{2 * BEAM_AVG_SAT:.2f} (Isat = "
-                f"{norm['Isat_mW_cm2']:.2f} mW/cm^2)")
+                f"{norm['Isat_mW_cm2']:.2f} mW/cm^2)"
+                + (f", vertical arms x{MOT_V_RATIO:g}"
+                   if MOT_V_RATIO != 1 else ""))
         run.say(f"atom beam at {BEAM_TILT_DEG:.1f} deg to the x MOT pair and "
                 f"{90 - BEAM_TILT_DEG:.1f} deg to the y pair; z pair square-on")
         if np.isfinite(t_free_mol_c):
@@ -2357,6 +2363,7 @@ def main():
                           - d_slow / sim.YB174_LINEWIDTH_HZ)))])}
                if scan else {}),
             "beam_peak_saturation": 2.0 * BEAM_AVG_SAT,
+            "mot_vertical_power_ratio": MOT_V_RATIO,
             "axial_gradient_G_per_cm": field_info["gradient_G_per_cm"],
             "flight_time_ms": t_flight * 1e3,
             "gravitational_sag_over_flight_um": sag_um,

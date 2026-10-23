@@ -39,8 +39,8 @@ N_TURNS_BOTTOM = float(os.environ.get("FT_COIL_TURNS_BOTTOM", TURNS_PER_SIDE))
 
 # These give the roughly 5mm offset from geometric center we saw:
 
-N_TURNS_TOP = 63
-N_TURNS_BOTTOM = 57
+N_TURNS_TOP = 64
+N_TURNS_BOTTOM = 64
 
 RADIUS_POSITIONS_MM = INNER_RADIUS_MM + WIRE_SIDE_MM / 2 + np.arange(N_RADIAL) * WIRE_SIDE_MM
 HEIGHT_POSITIONS_MM = GAP_BETWEEN_COILS_MM / 2 + WIRE_SIDE_MM / 2 + np.arange(TURNS_PER_LAYER) * WIRE_SIDE_MM
@@ -238,3 +238,4 @@ if __name__ == '__main__':
           f"top {REF_CURRENT_TOP_A:g}, bottom {REF_CURRENT_BOTTOM_A:g}; "
           f"z offsets: top {DZ_TOP_MM:+g} mm, bottom {DZ_BOTTOM_MM:+g} mm; field zero at z = "
           f"{field_zero_z_mm():+.2f} mm")
+  
