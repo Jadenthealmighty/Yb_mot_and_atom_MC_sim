@@ -193,7 +193,7 @@ def beam_mW(avg_sat, r_mm, isat):
 def power_mW(s_avg, r_mm, mot_mm, isat, mot_avg_sat):
     """Slowing beam plus MOT_ARMS MOT arms."""
     return (beam_mW(s_avg, r_mm, isat)
-            + MOT_ARMS * beam_mW(mot_avg_sat, mot_mm, isat))
+            + 0.5 *MOT_ARMS * beam_mW(mot_avg_sat, mot_mm, isat))
 
 
 def slices(rows):
