@@ -23,9 +23,9 @@ import numpy as np
 
 from beam_sweep import _envf, _floats, INK, INK2, MUTED, SURFACE
 
-CURRENTS_A = _floats("MS_CURRENTS_A", "10,20,30,40,50,60,70,80")
+CURRENTS_A = _floats("MS_CURRENTS_A", "90,100,110,120,130,140,150,160,170")
 DETUNINGS_GAMMA = _floats("MS_DETUNINGS_GAMMA",
-                          "-0.5,-1,-1.5,-2,-2.5,-3,-3.5,-4")
+                          "-0.5,-1,-1.5,-2")
 MOT_RADIUS_MM = _envf("MS_MOT_RADIUS_MM", 5.0)
 TOTAL_MW = _envf("MS_TOTAL_MW", 30.0)
 V_RATIO = _envf("MS_V_RATIO", 2.0)
