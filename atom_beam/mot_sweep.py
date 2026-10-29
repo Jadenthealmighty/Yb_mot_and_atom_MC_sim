@@ -23,7 +23,7 @@ import numpy as np
 
 from beam_sweep import _envf, _floats, INK, INK2, MUTED, SURFACE
 
-CURRENTS_A = _floats("MS_CURRENTS_A", "100,110,")
+CURRENTS_A = _floats("MS_CURRENTS_A", "100,110")
 DETUNINGS_GAMMA = _floats("MS_DETUNINGS_GAMMA",
                           "-1,-1.5")
 MOT_RADIUS_MM = _envf("MS_MOT_RADIUS_MM", 5.0)
