@@ -118,7 +118,7 @@ TOLERANCE_ENABLED = bool(_envi("FT_TOLERANCE", 0))
 TOL_MARGIN_MM = _envf("FT_TOL_MARGIN_MM", 3.0)
 TIME_BUDGET_H = _envf("FT_TIME_BUDGET_H", 1)
 TOL_N_V = _envi("FT_TOL_N_V", 41)
-TOL_TEMP_C = _envf("FT_TOL_TEMP_C", 425.0)
+TOL_TEMP_C = _envf("FT_TOL_TEMP_C", 383.0)
 TOL_MOT_OFFSET_MM = tuple(float(x) for x in os.environ.get(
     "FT_TOL_MOT_OFFSETS", "0,0.05,0.1,0.2,0.4,0.8,1.6").split(","))
 TOL_MOT_BEAM_INDEX = _envi("FT_TOL_MOT_BEAM", 0)
