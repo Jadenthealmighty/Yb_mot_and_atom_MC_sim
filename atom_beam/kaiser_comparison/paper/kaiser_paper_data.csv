@@ -73,3 +73,61 @@ text,vperp_rms_cell,,6.0,,,m/s,n/a,Voigt Gaussian rms k v = 2pi x 15 MHz
 text,A1_cell_absorption_slope,,5461,91,,K,n/a,log10(abs) = -A1/T + B1 below 450C
 text,A2_alpha_slope,,5371,77,,K,n/a,log10(alpha) = -A2/T + B2
 text,alpha_optical_pumping,,0.037,,,1/s,n/a,added to Fig 12 fit
+fig8,L_mot_slower,0.002997,1.16e+08,,s_delta,atoms/s,on,T=395C; Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig8,L_mot_slower,0.003883,1.82e+08,,s_delta,atoms/s,on,T=395C; Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig8,L_mot_slower,0.004901,2.53e+08,,s_delta,atoms/s,on,T=395C; Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig8,L_mot_slower,0.005911,3.6e+08,,s_delta,atoms/s,on,T=395C; Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig8,L_mot_slower,0.006921,4.41e+08,,s_delta,atoms/s,on,T=395C; Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig8,L_mot_slower,0.008875,6.52e+08,,s_delta,atoms/s,on,T=395C; Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig8,L_mot_slower,0.01034,9.78e+08,,s_delta,atoms/s,on,T=395C; Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig8,L_mot_slower,0.01128,1.37e+09,,s_delta,atoms/s,on,T=395C; Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig8,L_mot_slower,0.01186,1.4e+09,,s_delta,atoms/s,on,T=395C; Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig8,N_mot_slower,0.002997,1.48e+08,,s_delta,atoms,on,T=395C; Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig8,N_mot_slower,0.003883,2.38e+08,,s_delta,atoms,on,T=395C; Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig8,N_mot_slower,0.004901,2.96e+08,,s_delta,atoms,on,T=395C; Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig8,N_mot_slower,0.005911,3.34e+08,,s_delta,atoms,on,T=395C; Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig8,N_mot_slower,0.006921,3.7e+08,,s_delta,atoms,on,T=395C; Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig8,N_mot_slower,0.008875,3.94e+08,,s_delta,atoms,on,T=395C; Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig8,N_mot_slower,0.01034,4.24e+08,,s_delta,atoms,on,T=395C; Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig8,N_mot_slower,0.01128,4.57e+08,,s_delta,atoms,on,T=395C; Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig8,N_mot_slower,0.01186,4.59e+08,,s_delta,atoms,on,T=395C; Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,L_slower,285,1.76e+07,,C,atoms/s,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,L_slower,292,2.37e+07,,C,atoms/s,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,L_slower,302,3.97e+07,,C,atoms/s,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,L_slower,312,5.99e+07,,C,atoms/s,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,L_slower,322,8.19e+07,,C,atoms/s,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,L_slower,332,1.21e+08,,C,atoms/s,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,L_slower,342,1.94e+08,,C,atoms/s,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,L_slower,355,2.8e+08,,C,atoms/s,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,L_slower,365,4.15e+08,,C,atoms/s,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,L_slower,377,5.69e+08,,C,atoms/s,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,L_slower,387,8.37e+08,,C,atoms/s,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,L_slower,397,1.09e+09,,C,atoms/s,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,L_slower,407,1.36e+09,,C,atoms/s,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,L_slower,415,1.7e+09,,C,atoms/s,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,L_slower,430,2.56e+09,,C,atoms/s,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,L_slower,437,2.96e+09,,C,atoms/s,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,L_slower,445,3.23e+09,,C,atoms/s,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,L_slower,450,3.58e+09,,C,atoms/s,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,L_slower,455,3.69e+09,,C,atoms/s,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,L_slower,457,3.11e+09,,C,atoms/s,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,N_slower,285,5.69e+07,,C,atoms,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,N_slower,292,6.77e+07,,C,atoms,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,N_slower,302,8.55e+07,,C,atoms,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,N_slower,312,1.08e+08,,C,atoms,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,N_slower,322,1.35e+08,,C,atoms,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,N_slower,332,1.72e+08,,C,atoms,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,N_slower,342,2.17e+08,,C,atoms,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,N_slower,355,2.81e+08,,C,atoms,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,N_slower,365,3.5e+08,,C,atoms,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,N_slower,377,4.26e+08,,C,atoms,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,N_slower,387,4.94e+08,,C,atoms,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,N_slower,397,5.55e+08,,C,atoms,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,N_slower,407,6.2e+08,,C,atoms,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,N_slower,415,7.18e+08,,C,atoms,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,N_slower,430,8.47e+08,,C,atoms,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,N_slower,437,8.9e+08,,C,atoms,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,N_slower,445,9.1e+08,,C,atoms,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,N_slower,450,9.35e+08,,C,atoms,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,N_slower,455,9.1e+08,,C,atoms,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW
+fig11,N_slower,457,8.8e+08,,C,atoms,on,PMOT=100mW (19/12); Delta=-2Gamma; gradB=32G/cm; Pslow=300mW

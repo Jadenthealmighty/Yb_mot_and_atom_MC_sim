@@ -11,8 +11,8 @@ sys.path.append(os.path.dirname(HERE))
 for _k, _v in dict(FT_BEAM_TILT_DEG=45.0, FT_FLIGHT_MM=520.0,
                    FT_TRAP_HALF_MM=25.5, FT_OFFSET_STEP_MM=3.0,
                    FT_WAIST_M=0.022, FT_SLOWER=0, FT_NOZZLE_OFFSET_C=0.0,
-                   FT_S_NEAR_MM=66.0, FT_S_PAST_MM=66.0, FT_S_NEAR_STEP_MM=1.5,
-                   FT_S_FAR_STEP_MM=15.0, FT_V_RES_MS=2.5,
+                   FT_S_NEAR_MM=100.0, FT_S_PAST_MM=66.0, FT_S_NEAR_STEP_MM=1.5,
+                   FT_S_FAR_STEP_MM=7.5, FT_V_RES_MS=2.5,
                    FT_RESERVED_CPUS=2,
                    RUNLOG_ROOT=os.path.join(HERE, "runs")).items():
     os.environ.setdefault(_k, str(_v))
@@ -33,17 +33,29 @@ import full_trap_sweep as fts
 import helpers.coil_field_model as cfm
 import helpers.trap_beams as tb
 import helpers.yb174_mot_simulation as sim
+import kaiser_coils as kc
 
 GAMMA_PAPER_HZ = 29e6
 ISAT_PAPER_W_M2 = 600.0
 CACHE_DIR = os.path.join(HERE, "cache")
 
+FIELD_MODEL = os.environ.get("KM_FIELD", "coils")
+SLOWER_OFFSET_HZ = -220e6
+SLOWER_WAIST_M = float(os.environ.get("KM_SLOWER_WAIST_MM", 5.0)) * 1e-3
+SLOWER_POL = int(os.environ.get("KM_SLOWER_POL", +1))
+SLOWER_ANGLE_MRAD = float(os.environ.get("KM_SLOWER_ANGLE_MRAD", 0.0))
 
-def mot_config(name, grad_G_cm, detuning_gamma, P_h_mW, P_v_mW, waist_m=0.022):
-    """One MOT setting. grad is the strong (vertical) axis, detuning in paper Gamma."""
+
+def mot_config(name, grad_G_cm, detuning_gamma, P_h_mW, P_v_mW, waist_m=0.022,
+               P_slow_mW=0.0, slow_waist_m=None):
+    """One MOT setting. grad is the strong (vertical) axis, detuning in paper
+    Gamma. The slower sits 220 MHz below the MOT beams."""
     return dict(name=name, grad_G_cm=grad_G_cm,
                 detuning_hz=detuning_gamma * GAMMA_PAPER_HZ,
-                P_h_mW=P_h_mW, P_v_mW=P_v_mW, waist_m=waist_m)
+                P_h_mW=P_h_mW, P_v_mW=P_v_mW, waist_m=waist_m,
+                field=FIELD_MODEL, P_slow_mW=P_slow_mW,
+                slow_waist_m=SLOWER_WAIST_M if slow_waist_m is None else slow_waist_m,
+                slow_pol=SLOWER_POL, slow_angle_mrad=SLOWER_ANGLE_MRAD)
 
 
 def s_delta(cfg):
@@ -62,9 +74,28 @@ def quadrupole(grad_G_cm):
     return B
 
 
+def field(cfg):
+    if cfg.get("field", "quad") == "quad":
+        return quadrupole(cfg["grad_G_cm"])
+    return kc.field_function(cfg["grad_G_cm"])
+
+
+def slower_khat(cfg):
+    """Counter-propagating to the atom beam, tilted in the horizontal plane
+    about the trap centre."""
+    a = cfg["slow_angle_mrad"] * 1e-3
+    return -(math.cos(a) * fts.U_HAT + math.sin(a) * fts.E_H)
+
+
+def slower_v_res(cfg):
+    """Velocity the slower is resonant with at B = 0."""
+    return abs(cfg["detuning_hz"] + SLOWER_OFFSET_HZ) * sim.YB174_WAVELENGTH_M
+
+
 def build_eqn(norm, cfg):
-    """Rate-equation MOT: 19/12 mW style split, linear quadrupole, 45 deg beam."""
-    B = cfm.make_pylcp_magfield(quadrupole(cfg["grad_G_cm"]), norm["x0"],
+    """Rate-equation MOT: 19/12 mW style split, coil (or linear) field, 45 deg
+    atom beam, optional collimated slowing beam through the trap centre."""
+    B = cfm.make_pylcp_magfield(field(cfg), norm["x0"],
                                 norm["Gamma_SI"], gJ_excited=sim.YB174_GJ_EXCITED)
     eps = sim.MAGFIELD_GRADIENT_EPS_UM * 1e-6 / norm["x0"]
     magField = fts.MemoMagField(pylcp.magField(B, eps=eps))
@@ -76,6 +107,13 @@ def build_eqn(norm, cfg):
         s = 2 * P * 1e-3 / (math.pi * w ** 2) / norm["Isat_SI"]
         beams.append(tb.OffsetGaussianBeam(kvec=k, pol=p, s=s, delta=delta,
                                            wb=w / norm["x0"]))
+    if cfg.get("P_slow_mW", 0) > 0:
+        ws = cfg["slow_waist_m"]
+        beams.append(tb.OffsetGaussianBeam(
+            kvec=slower_khat(cfg), pol=cfg["slow_pol"],
+            s=2 * cfg["P_slow_mW"] * 1e-3 / (math.pi * ws ** 2) / norm["Isat_SI"],
+            delta=2 * np.pi * (cfg["detuning_hz"] + SLOWER_OFFSET_HZ) / norm["Gamma_SI"],
+            wb=ws / norm["x0"]))
     ham = sim.build_hamiltonian(norm)
     a_g = -sp_const.g * norm["t0"] ** 2 / norm["x0"]
     return fts.MemoCulledRateEq(pylcp.laserBeams(beams), magField, ham,
@@ -118,6 +156,7 @@ def force_grid(norm, cfg, v_max_ms=90.0, workers=None, say=print):
 
 def _key(cfg, v_max_ms):
     blob = json.dumps(dict(cfg, v_max=v_max_ms, half=fts.TRAP_HALF_MM,
+                           coils=kc.GEOMETRY if cfg.get("field") == "coils" else None,
                            step=fts.OFFSET_STEP_MM, s=list(fts.build_axial_grid()),
                            cap=fts.CAPTURE_AXIAL_MM, dwell=fts.CAPTURE_DWELL_MS,
                            stop=fts.STOP_FRAC), sort_keys=True)
@@ -127,6 +166,10 @@ def _key(cfg, v_max_ms):
 def capture_map(run, norm, cfg):
     """(offs, s, v, a_grid, vc, t_stop), cached per config; widens v if saturated."""
     v_max = 90.0
+    if cfg.get("P_slow_mW", 0) > 0:
+        v_max = max(v_max, 1.5 * slower_v_res(cfg) + 60.0)
+    if cfg.get("field") == "coils":
+        kc.field_table()
     while True:
         path = os.path.join(CACHE_DIR, f"{cfg['name']}_{_key(cfg, v_max)}.npz")
         if os.path.exists(path):
