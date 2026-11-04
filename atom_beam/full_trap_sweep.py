@@ -184,7 +184,8 @@ def yb_vapour_pressure_pa(temp_k):
         log10(P/bar) = 9.111 - 8111/T - 1.0849 * log10(T)
 
     """
-    return 1e5 * 10.0 ** (9.111 - 8111.0 / temp_k
+    # CHANGE BACK PLZ, A term should be 9.111 not 14.117
+    return 1e5 * 10.0 ** (14.117 - 8111.0 / temp_k
                           - 1.0849 * np.log10(temp_k))
 
 
