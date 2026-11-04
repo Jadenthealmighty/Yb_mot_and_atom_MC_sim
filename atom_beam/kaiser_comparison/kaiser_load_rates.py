@@ -86,7 +86,7 @@ def run_fig7(run, norm, data, tab):
     a.plot(g[ip[1]], d[ip[0]], "k^", ms=10, label="paper optimum")
     a.plot(g[is_[1]], d[is_[0]], "ko", mfc="none", ms=12, label="sim optimum")
     a.legend(fontsize=8)
-    a.set_title("shape: each map over its own max")
+    a.set_title("Relative maps")
     for a in ax:
         a.set_xlabel(r"$\nabla B$ [G/cm]")
         a.set_ylabel(r"$\Delta$ [MHz]")
