@@ -37,6 +37,7 @@ import numba
 import numpy as np
 import scipy.constants as sp_const
 from matplotlib.colors import LogNorm
+from matplotlib.ticker import FuncFormatter, LogLocator, MultipleLocator
 from scipy.integrate import solve_ivp
 from scipy.interpolate import RegularGridInterpolator
 
@@ -1794,6 +1795,33 @@ def fig_rate_vs_temperature(temps_c, rows, t_free_mol_c):
     return fig
 
 
+def fig_load_rate(rows):
+    """Load rate vs oven temperature only, log scale with every tick gridded."""
+    T = np.asarray([r["T_c"] for r in rows])
+    R = np.asarray([r["rate"] for r in rows])
+    fig, ax = plt.subplots(figsize=(9, 6), constrained_layout=True)
+    ax.semilogy(T, R, color=TRAP_C, lw=2.4)
+    ax.yaxis.set_major_locator(LogLocator(base=10, numticks=30))
+    ax.yaxis.set_minor_locator(LogLocator(base=10, subs=np.arange(2, 10), numticks=30))
+    if np.log10(R[R > 0].max() / R[R > 0].min()) <= 3:
+        ax.yaxis.set_minor_formatter(FuncFormatter(
+            lambda y, _: (f"{y / 10 ** np.floor(np.log10(y)):.0f}"
+                          if round(y / 10 ** np.floor(np.log10(y))) in (2, 5) else "")))
+        ax.tick_params(axis="y", which="minor", labelsize=8)
+    span = T.max() - T.min()
+    step = 10 if span <= 200 else 25
+    ax.xaxis.set_major_locator(MultipleLocator(step * 2))
+    ax.xaxis.set_minor_locator(MultipleLocator(step / 2))
+    ax.grid(which="major", alpha=0.5, lw=0.9)
+    ax.grid(which="minor", alpha=0.2, lw=0.6)
+    ax.tick_params(which="both", direction="in", top=True, right=True)
+    ax.set_xlim(T.min(), T.max())
+    ax.set_xlabel(r"oven temperature [$^\circ$C]")
+    ax.set_ylabel("MOT load rate [atoms s$^{-1}$]")
+    ax.set_title("MOT load rate vs oven temperature")
+    return fig
+
+
 def fig_competing_trends(rows, t_free_mol_c):
     fig, ax = plt.subplots(figsize=(11, 6.4), constrained_layout=True)
     T = np.asarray([r["T_c"] for r in rows])
@@ -2238,6 +2266,7 @@ def main():
                    "trapped_fraction_vs_temperature", close=True)
         run.figure(fig_rate_vs_temperature(temps_c, rows, t_free_mol_c),
                    "load_rate_and_trapped_number", close=True)
+        run.figure(fig_load_rate(rows), "load_rate_vs_temperature", close=True)
         run.figure(fig_competing_trends(rows, t_free_mol_c),
                    "competing_temperature_trends", close=True)
         run.figure(fig_flux_cascade(rows, t_free_mol_c), "flux_cascade",
