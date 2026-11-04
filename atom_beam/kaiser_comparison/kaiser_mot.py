@@ -41,7 +41,7 @@ CACHE_DIR = os.path.join(HERE, "cache")
 
 FIELD_MODEL = os.environ.get("KM_FIELD", "coils")
 SLOWER_OFFSET_HZ = -220e6
-SLOWER_WAIST_M = float(os.environ.get("KM_SLOWER_WAIST_MM", 44.0)) * 1e-3
+SLOWER_WAIST_M = float(os.environ.get("KM_SLOWER_WAIST_MM", 22.0)) * 1e-3
 SLOWER_POL = int(os.environ.get("KM_SLOWER_POL", +1))
 SLOWER_ANGLE_MRAD = float(os.environ.get("KM_SLOWER_ANGLE_MRAD", 0.0))
 
