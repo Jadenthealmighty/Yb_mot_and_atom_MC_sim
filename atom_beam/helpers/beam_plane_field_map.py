@@ -69,7 +69,7 @@ MAP_FLOOR_G = 0.5
 
 # YB constants--
 YB174_TRANSITION_FREQ_HZ = 751.5265174e12
-YB174_LINEWIDTH_HZ = 30.2e6      
+YB174_LINEWIDTH_HZ = 29.13e6      # tau(1P1) = 5.464 ns
 YB174_GJ_EXCITED = 1.0           
 REF_OVEN_C = 383.0              
 

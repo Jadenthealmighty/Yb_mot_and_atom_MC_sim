@@ -117,7 +117,7 @@ def trap_data(tr, half_mm):
 
 def vapour_density(T_c):
     T = T_c - T_OFFSET + 273.15
-    p = 1e5 * 10.0 ** (14.117 - 8111.0 / T - 1.0849 * np.log10(T))
+    p = 1e5 * 10.0 ** (9.111 - 8111.0 / T - 1.0849 * np.log10(T))
     return p / (m2d.KB * T)
 
 

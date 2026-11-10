@@ -252,7 +252,7 @@ if __name__ == "__main__":
     print("=" * 70)
 
     lam = 398.9114e-9
-    Gamma = 2 * np.pi * 30.2e6
+    Gamma = 2 * np.pi * 29.13e6
     x0 = lam / (2 * np.pi)
     isat = (np.pi * sp_const.h * sp_const.c * Gamma) / (3 * lam ** 3)
     norm = dict(x0=x0, Isat_SI=isat)

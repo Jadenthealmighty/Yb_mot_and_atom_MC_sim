@@ -26,7 +26,7 @@ from beam_sweep import _envf, _floats, INK, INK2, MUTED, SURFACE
 CURRENTS_A = _floats("MS_CURRENTS_A", "100,110")
 DETUNINGS_GAMMA = _floats("MS_DETUNINGS_GAMMA",
                           "-1,-1.5")
-MOT_RADIUS_MM = _envf("MS_MOT_RADIUS_MM", 4.0)
+MOT_RADIUS_MM = _envf("MS_MOT_RADIUS_MM", 9.4)
 TOTAL_MW = _envf("MS_TOTAL_MW", 30.0)
 V_RATIO = _envf("MS_V_RATIO", 2.0)
 REF_TEMP_C = _envf("MS_REF_TEMP_C", 400.0)
